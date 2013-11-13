@@ -10,56 +10,17 @@
 #include <csignal>
 #include <map>
 
-#include "main.h"
-#include "serialize.h"
-#include "bitcoinrpc.h"
-#include "json/json_spirit_value.h"
-#include <boost/thread.hpp>
-#include <boost/asio.hpp>
-#include <boost/uuid/sha1.hpp>
+#include "main_poolminer.hpp"
 
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 4
+#define VERSION_MINOR 5
 #define VERSION_EXT "RC0"
 
 #define MAX_THREADS 64
 
-// <START> be compatible to original code (not actually used!)
-#include "txdb.h"
-#include "walletdb.h"
-#include "wallet.h"
-#include "ui_interface.h"
-CWallet *pwalletMain;
-CClientUIInterface uiInterface;
-void StartShutdown() {
-  exit(0);
-}
-// </END>
-
 /*********************************
 * global variables, structs and extern functions
 *********************************/
-
-extern CBlockIndex *pindexBest;
-extern uint256 nShareBits;
-uint256 nNetworkBits = 0;
-extern void BitcoinMiner(CWallet        *pwallet,
-                         CBlockProvider *CBlockProvider,
-                         unsigned int thread_id);
-extern bool fPrintToConsole;
-extern bool fDebug;
-
-struct blockHeader_t {
-  // comments: BYTES <index> + <length>
-  int           nVersion;            // 0+4
-  uint256       hashPrevBlock;       // 4+32
-  uint256       hashMerkleRoot;      // 36+32
-  unsigned int  nTime;               // 68+4
-  unsigned int  nBits;               // 72+4
-  unsigned int  nNonce;              // 76+4
-  unsigned int  nBirthdayA;          // 80+4
-  unsigned int  nBirthdayB;          // 84+4                                 /
-};                                   // = 88 bytes header (80 default + 48 primemultiplier)
 
 size_t thread_num_max;
 static size_t fee_to_pay;
@@ -73,128 +34,70 @@ std::string pool_username;
 std::string pool_password;
 
 /*********************************
-* helping functions
-*********************************/
-
-void convertDataToBlock(unsigned char* blockData, CBlock& block) {
-  {
-    std::stringstream ss;
-    for (int i = 7; i >= 0; --i)
-		ss << std::setw(8) << std::setfill('0') << std::hex << *((int *)(blockData + 4) + i);
-    ss.flush();
-    block.hashPrevBlock.SetHex(ss.str().c_str());
-  }
-  {
-    std::stringstream ss;
-    for (int i = 7; i >= 0; --i)
-		ss << std::setw(8) << std::setfill('0') << std::hex << *((int *)(blockData + 36) + i);
-    ss.flush();
-    block.hashMerkleRoot.SetHex(ss.str().c_str());
-  }
-  {
-    std::stringstream ss;
-    for (int i = 7; i >= 0; --i)
-		ss << std::setw(8) << std::setfill('0') << std::hex << *((int *)(blockData + 80) + i);
-    ss.flush();
-    //block.hashMerkleRoot.SetHex(ss.str().c_str());
-    nShareBits.SetHex(ss.str().c_str());
-  }
-  block.nVersion               = *((int *)(blockData));
-  block.nTime                  = *((unsigned int *)(blockData + 68));
-  block.nBits                  = *((unsigned int *)(blockData + 72));
-  block.nNonce                 = *((unsigned int *)(blockData + 76));
-  block.nBirthdayA = 0;
-  block.nBirthdayB = 0;
-  
-  nNetworkBits = CBigNum().SetCompact(block.nBits).getuint256();
-  
-  //DEBUG:
-  //std::cout << "received " << block.hashMerkleRoot.ToString().c_str() << std::endl;
-
-  //nShareBits =  *((unsigned int *)(blockData + 80));
-  //nShareBits = CBigNum().SetHex(*((unsigned char *)(blockData + 80))).GetCompact();
-}
-
-/*********************************
 * class CBlockProviderGW to (incl. SUBMIT_BLOCK)
 *********************************/
 
 class CBlockProviderGW : public CBlockProvider {
 public:
 
-	CBlockProviderGW() : CBlockProvider(), nTime_offset(0), _blocks(NULL) {}
+	CBlockProviderGW() : CBlockProvider(), nTime_offset(0), _block(NULL) {}
 
 	virtual ~CBlockProviderGW() { /* TODO */ }
 
 	virtual unsigned int GetAdjustedTimeWithOffset(unsigned int thread_id) {
-		return nTime_offset + ((((unsigned int)GetAdjustedTime() + thread_num_max) / thread_num_max) * thread_num_max) + thread_id;
+		return nTime_offset + ((((unsigned int)time(NULL) + thread_num_max) / thread_num_max) * thread_num_max) + thread_id;
 	}
 
-	virtual CBlock* getBlock(unsigned int thread_id, unsigned int last_time) {
+	virtual blockHeader_t* getBlock(unsigned int thread_id, unsigned int last_time) {
 		boost::unique_lock<boost::shared_mutex> lock(_mutex_getwork);
-		if (_blocks == NULL) return NULL;
-		CBlock* block = NULL;
-		block = new CBlock(_blocks->GetBlockHeader());
+		if (_block == NULL) return NULL;
+		blockHeader_t* block = new blockHeader_t;
+		memcpy(block, _block, 80+32+8);
 		unsigned int new_time = GetAdjustedTimeWithOffset(thread_id);
 		if (new_time == last_time)
 			new_time += thread_num_max;
-		block->nTime = new_time; //TODO: check if this is the same time like before!?
+		block->nTime = new_time;
 		//std::cout << "[WORKER" << thread_id << "] got_work block=" << block->GetHash().ToString().c_str() << std::endl;
 		return block;
 	}
-
-	void setBlocksFromData(unsigned char* data) {
-		CBlock* blocks = new CBlock(); //[thread_num_count];
-		//for (size_t i = 0; i < thread_num_count; ++i)
-		//	convertDataToBlock(data+i*128,blocks[i]);
-		convertDataToBlock(data,*blocks);
-		//
-		unsigned int nTime_local = GetAdjustedTime();
-		unsigned int nTime_server = blocks->nTime;
-		nTime_offset = nTime_local > nTime_server ? 0 : (nTime_server-nTime_local);
-		//
-		CBlock* old_blocks = NULL;
-		{
-			boost::unique_lock<boost::shared_mutex> lock(_mutex_getwork);
-			old_blocks = _blocks;
-			_blocks = blocks;
-		}
-		if (old_blocks != NULL) delete old_blocks;
+	
+	virtual blockHeader_t* getOriginalBlock() {
+		return _block;
 	}
 
-	void submitBlock(CBlock *block) {
-		blockHeader_t blockraw;
-		blockraw.nVersion       = block->nVersion;
-		blockraw.hashPrevBlock  = block->hashPrevBlock;
-		blockraw.hashMerkleRoot = block->hashMerkleRoot;
-		blockraw.nTime          = block->nTime;
-		blockraw.nBits          = block->nBits;
-		blockraw.nNonce         = block->nNonce;
-		blockraw.nBirthdayA     = block->nBirthdayA;
-        blockraw.nBirthdayB     = block->nBirthdayB;
-		
-		//DEBUG:
-		//std::cout << "sending " << blockraw.hashMerkleRoot.ToString().c_str() << std::endl;
-		
-		boost::posix_time::ptime submit_start = boost::posix_time::second_clock::universal_time();
-		boost::system::error_code submit_error = boost::asio::error::host_not_found; //run at least 1 time
-		++submitting_share;
-		while (submit_error && running && (boost::posix_time::second_clock::universal_time() - submit_start).total_seconds() < 80) {
-			while (socket_to_server == NULL && running && (boost::posix_time::second_clock::universal_time() - submit_start).total_seconds() < 80) //socket error was issued somewhere else
-				boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-			if (running && (boost::posix_time::second_clock::universal_time() - submit_start).total_seconds() < 80) {
-				boost::asio::write(*socket_to_server, boost::asio::buffer((unsigned char*)&blockraw, 88), boost::asio::transfer_at_least(1), submit_error); //FaF
-				//size_t len = boost::asio::write(*socket_to_server, boost::asio::buffer((unsigned char*)&blockraw, 128), boost::asio::transfer_all(), submit_error);
-				//socket_to_server->write_some(boost::asio::buffer((unsigned char*)&blockraw, 128), submit_error);
-				//if (submit_error)
-				//	std::cout << submit_error << " @ write_submit" << std::endl;
-			}
+	void setBlocksFromData(unsigned char* data) {
+		blockHeader_t* block = new blockHeader_t;
+		memcpy(block, data, 80); //0-79
+		block->birthdayA = 0;    //80-83
+		block->birthdayB = 0;    //84-87
+		memcpy(((unsigned char*)block)+88,data+80, 32);
+		//
+		unsigned int nTime_local = time(NULL);
+		unsigned int nTime_server = block->nTime;
+		nTime_offset = nTime_local > nTime_server ? 0 : (nTime_server-nTime_local);
+		//
+		blockHeader_t* old_block = NULL;
+		{
+			boost::unique_lock<boost::shared_mutex> lock(_mutex_getwork);
+			old_block = _block;
+			_block = block;
 		}
-		--submitting_share;
+		if (old_block != NULL) delete old_block;
+	}
+
+	void submitBlock(blockHeader_t *block) {
+		blockHeader_t submitblock; //!
+		memcpy((unsigned char*)&submitblock, (unsigned char*)block, 88);
+		std::cout << "[WORKER] collision found: " << submitblock.birthdayA << " <-> " << submitblock.birthdayB << " @ " << totalCollisionCount << std::endl;
+		boost::system::error_code submit_error = boost::asio::error::host_not_found;
+		boost::asio::write(*socket_to_server, boost::asio::buffer((unsigned char*)&submitblock, 88), boost::asio::transfer_all(), submit_error); //FaF
+		//if (submit_error)
+		//	std::cout << submit_error << " @ submit" << std::endl;
 	}
 
 	void forceReconnect() {
 		std::cout << "force reconnect if possible!" << std::endl;
+		//TODO: THREAD SAFETY
 		if (socket_to_server != NULL) {
 			boost::system::error_code close_error;
 			socket_to_server->close(close_error);
@@ -206,7 +109,7 @@ public:
 protected:
 	unsigned int nTime_offset;
 	boost::shared_mutex _mutex_getwork;
-	CBlock* _blocks;
+	blockHeader_t* _block;
 };
 
 /*********************************
@@ -223,14 +126,23 @@ class CWorkerThread { // worker=miner
 public:
 
 	CWorkerThread(CMasterThreadStub *master, unsigned int id, CBlockProviderGW *bprovider)
-		: _working_lock(NULL), _id(id), _master(master), _bprovider(bprovider), _thread(&CWorkerThread::run, this) { }
+		: _collisionMap(NULL), _working_lock(NULL), _id(id), _master(master), _bprovider(bprovider), _thread(&CWorkerThread::run, this) {
+		_collisionMap = (uint32*)malloc(sizeof(uint32)*COLLISION_TABLE_SIZE);
+		}
 
 	void run() {
 		std::cout << "[WORKER" << _id << "] Hello, World!" << std::endl;
 		_master->wait_for_master();
 		std::cout << "[WORKER" << _id << "] GoGoGo!" << std::endl;
-		boost::this_thread::sleep(boost::posix_time::seconds(2));
-		BitcoinMiner(NULL, _bprovider, _id);
+		boost::this_thread::sleep(boost::posix_time::seconds(1));
+		blockHeader_t* thrblock = NULL;
+		while (running) {
+			thrblock = _bprovider->getBlock(_id, thrblock == NULL ? 0 : thrblock->nTime);
+			if (thrblock != NULL)
+				protoshares_process_512(thrblock, _collisionMap, _bprovider);
+			else
+				boost::this_thread::sleep(boost::posix_time::seconds(1));
+		}
 		std::cout << "[WORKER" << _id << "] Bye Bye!" << std::endl;
 	}
 
@@ -239,6 +151,7 @@ public:
 	}
 
 protected:
+  uint32* _collisionMap;
   boost::shared_lock<boost::shared_mutex> *_working_lock;
   unsigned int _id;
   CMasterThreadStub *_master;
@@ -265,7 +178,8 @@ public:
 
     boost::asio::io_service io_service;
     boost::asio::ip::tcp::resolver resolver(io_service); //resolve dns
-    boost::asio::ip::tcp::resolver::query query(GetArg("-poolip", "127.0.0.1"), GetArg("-poolport", "1337"));
+	boost::asio::ip::tcp::resolver::query query("ptsmine.beeeeer.org", "1337");
+	//boost::asio::ip::tcp::resolver::query query("127.0.0.1", "1337");
     boost::asio::ip::tcp::resolver::iterator endpoint;
 	boost::asio::ip::tcp::resolver::iterator end;
 	boost::asio::ip::tcp::no_delay nd_option(true);
@@ -325,7 +239,6 @@ public:
 				unsigned char buf = 0; //get header
 				boost::system::error_code error;
 				size_t len = boost::asio::read(*socket_to_server, boost::asio::buffer(&buf, 1), boost::asio::transfer_all(), error);
-				//size_t len = socket->read_some(boost::asio::buffer(&buf, 1), error);
 				if (error == boost::asio::error::eof)
 					break; // Connection closed cleanly by peer.
 				else if (error) {
@@ -343,9 +256,6 @@ public:
 					unsigned char* buf = new unsigned char[buf_size]; //get header
 					boost::system::error_code error;
 					size_t len = boost::asio::read(*socket_to_server, boost::asio::buffer(buf, buf_size), boost::asio::transfer_all(), error);
-					//size_t len = socket->read_some(boost::asio::buffer(buf, buf_size), error);
-					//while (len < buf_size)
-					//	len += socket->read_some(boost::asio::buffer(buf+len, buf_size-len), error);
 					if (error == boost::asio::error::eof) {
 						done = true;
 						break; // Connection closed cleanly by peer.
@@ -357,23 +267,15 @@ public:
 					if (len == buf_size) {
 						_bprovider->setBlocksFromData(buf);
 						std::cout << "[MASTER] work received"<< std::endl;
-                        std::cout << "[MASTER] network target:"<< nNetworkBits.ToString().c_str() << std::endl;
-                        std::cout << "[MASTER] share target:"<< nShareBits.ToString().c_str() << std::endl;
 					} else
 						std::cout << "error on read2a: " << len << " should be " << buf_size << std::endl;
 					delete[] buf;
-					CBlockIndex *pindexOld = pindexBest;
-					pindexBest = new CBlockIndex(); //=notify worker (this could need a efficient alternative)
-					delete pindexOld;
 				} break;
 				case 1: {
 					size_t buf_size = 4;
 					int buf; //get header
 					boost::system::error_code error;
 					size_t len = boost::asio::read(*socket_to_server, boost::asio::buffer(&buf, buf_size), boost::asio::transfer_all(), error);
-					//size_t len = socket->read_some(boost::asio::buffer(&buf, buf_size), error);
-					//while (len < buf_size)
-					//	len += socket->read_some(boost::asio::buffer(&buf+len, buf_size-len), error);
 					if (error == boost::asio::error::eof) {
 						done = true;
 						break; // Connection closed cleanly by peer.
@@ -415,8 +317,7 @@ public:
 		}
 
 		socket_to_server = NULL; //TODO: lock/mutex
-		for (int i = 0; i < 50 && submitting_share < 1; ++i) //wait <5 seconds until reconnect (force reconnect when share is waiting to be submitted)
-			boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+		boost::this_thread::sleep(boost::posix_time::seconds(10));
 	}
   }
 
@@ -446,7 +347,7 @@ private:
 		if (!running) return;
 		std::cout << std::fixed;
 		std::cout << std::setprecision(1);
-		boost::posix_time::ptime t_end = boost::posix_time::second_clock::universal_time();
+		boost::posix_time::ptime t_end = boost::posix_time::second_clock::local_time();
 		unsigned long rejects = 0;
 		unsigned long stale = 0;
 		unsigned long valid = 0;
@@ -457,20 +358,13 @@ private:
 			if (it->first == 1) blocks = it->second;
 			if (it->first > 1) valid += it->second;
 		}
-		std::cout << "[STATS] " << DateTimeStrFormat("%Y-%m-%d %H:%M:%S", GetTimeMillis() / 1000).c_str() << " | ";
-//  	for (std::map<int,unsigned long>::iterator it = statistics.begin(); it != statistics.end(); ++it)
-//  		if (it->first > 1)
-//  			std::cout << it->first << "-CH: " << it->second << " (" <<
-//  			  ((valid+blocks > 0) ? (static_cast<double>(it->second) / static_cast<double>(valid+blocks)) * 100.0 : 0.0) << "% | " <<
-//  			  ((valid+blocks > 0) ? (static_cast<double>(it->second) / (static_cast<double>((t_end - t_start).total_seconds()) / 3600.0)) : 0.0) << "/h), ";
+		std::cout << "[STATS] " << t_end << " | ";
+		if ((t_end - t_start).total_seconds() > 0)
+			std::cout << static_cast<double>(totalCollisionCount) / (static_cast<double>((t_end - t_start).total_seconds()) / 60.0) << " c/m | ";
 		if (valid+blocks+rejects+stale > 0) {
-            char buff[100];
-            sprintf(buff, "hashmeter %f hashs/min\n", dHashesPerSec);
-            //std::string buffAsStdStr = buff;
-        std::cout << buff;
-		std::cout << "VL: " << valid+blocks << " (" << (static_cast<double>(valid+blocks) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%), ";
-		std::cout << "RJ: " << rejects << " (" << (static_cast<double>(rejects) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%), ";
-		std::cout << "ST: " << stale << " (" << (static_cast<double>(stale) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%)" << std::endl;
+			std::cout << "VL: " << valid+blocks << " (" << (static_cast<double>(valid+blocks) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%), ";
+			std::cout << "RJ: " << rejects << " (" << (static_cast<double>(rejects) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%), ";
+			std::cout << "ST: " << stale << " (" << (static_cast<double>(stale) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%)" << std::endl;
 		} else {
 			std::cout <<  "VL: " << 0 << " (" << 0.0 << "%), ";
 			std::cout <<  "RJ: " << 0 << " (" << 0.0 << "%), ";
@@ -483,60 +377,19 @@ private:
 * exit / end / shutdown
 *********************************/
 
-void stats_on_exit() {
-	if (!running) return;
-	boost::this_thread::sleep(boost::posix_time::seconds(1));
-	std::cout << std::fixed;
-	std::cout << std::setprecision(3);
-	boost::posix_time::ptime t_end = boost::posix_time::second_clock::universal_time();
-	unsigned long rejects = 0;
-	unsigned long stale = 0;
-	unsigned long valid = 0;
-	unsigned long blocks = 0;
-	for (std::map<int,unsigned long>::iterator it = statistics.begin(); it != statistics.end(); ++it) {
-		if (it->first < 0) stale += it->second;
-		if (it->first == 0) rejects = it->second;
-		if (it->first == 1) blocks = it->second;
-		if (it->first > 1) valid += it->second;
-	}
-	std::cout << std::endl;
-	std::cout << "********************************************" << std::endl;
-	std::cout << "*** running time: " << static_cast<double>((t_end - t_start).total_seconds()) / 3600.0 << "h" << std::endl;
-	std::cout << "***" << std::endl;
-	for (std::map<int,unsigned long>::iterator it = statistics.begin(); it != statistics.end(); ++it)
-		if (it->first > 1)
-			std::cout << "*** " << it->first << "-chains: " << it->second << "\t(" <<
-			  ((valid+blocks > 0) ? (static_cast<double>(it->second) / static_cast<double>(valid+blocks)) * 100.0 : 0.0) << "% | " <<
-			  ((valid+blocks > 0) ? (static_cast<double>(it->second) / (static_cast<double>((t_end - t_start).total_seconds()) / 3600.0)) : 0.0) << "/h)" <<
-			  std::endl;
-	if (valid+blocks+rejects+stale > 0) {
-	std::cout << "***" << std::endl;
-	std::cout << "*** valid: " << valid+blocks << "\t(" << (static_cast<double>(valid+blocks) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%)" << std::endl;
-	std::cout << "*** rejects: " << rejects << "\t(" << (static_cast<double>(rejects) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%)" << std::endl;
-	std::cout << "*** stale: " << stale << "\t(" << (static_cast<double>(stale) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%)" << std::endl;
-	} else {
-		std::cout <<  "*** valid: " << 0 << "\t(" << 0.0 << "%)" << std::endl;
-		std::cout <<  "*** rejects: " << 0 << "\t(" << 0.0 << "%)" << std::endl;
-		std::cout <<  "*** stale: " << 0 << "\t(" << 0.0 << "%)" << std::endl;
-	}
-	std::cout << "********************************************" << std::endl;
-	boost::this_thread::sleep(boost::posix_time::seconds(3));
-}
-
 void exit_handler() {
 	//cleanup for not-retarded OS
 	if (socket_to_server != NULL) {
 		socket_to_server->close();
 		socket_to_server = NULL;
 	}
-	stats_on_exit();
 	running = false;
 }
 
 #if defined(__MINGW32__) || defined(__MINGW64__)
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+//#define WIN32_LEAN_AND_MEAN
+//#include <windows.h>
 
 BOOL WINAPI ctrl_handler(DWORD dwCtrlType) {
 	//'special' cleanup for windows
@@ -547,7 +400,6 @@ BOOL WINAPI ctrl_handler(DWORD dwCtrlType) {
 				socket_to_server->close();
 				socket_to_server = NULL;
 			}
-			stats_on_exit();
 			running = false;
 		} break;
 		default: break;
@@ -581,11 +433,12 @@ int main(int argc, char **argv)
   std::cout << "********************************************" << std::endl;
   std::cout << "*** ptsminer - Pts Pool Miner v" << VERSION_MAJOR << "." << VERSION_MINOR << " " << VERSION_EXT << std::endl;
   std::cout << "*** by xolokram/TB - www.beeeeer.org - glhf" << std::endl;
+  std::cout << "*** thanks to jh00, testix & Co." << std::endl;
   std::cout << "***" << std::endl;
   std::cout << "*** press CTRL+C to exit" << std::endl;
   std::cout << "********************************************" << std::endl;
 
-  t_start = boost::posix_time::second_clock::universal_time();
+  t_start = boost::posix_time::second_clock::local_time();
   running = true;
 
 #if defined(__MINGW32__) || defined(__MINGW64__)
@@ -594,11 +447,9 @@ int main(int argc, char **argv)
   set_signal_handler(SIGINT, ctrl_handler);
 #endif
 
-  if (argc < 2)
+  if (argc != 3)
   {
-    std::cerr << "usage: " << argv[0] <<
-    " -poolfee=<fee-in-%> -poolip=<ip> -poolport=<port> -pooluser=<user> -poolpassword=<password>" <<
-    std::endl;
+    std::cerr << "usage: " << argv[0] << " <user> <threads-to-use>" << std::endl;
     return EXIT_FAILURE;
   }
 
@@ -607,15 +458,12 @@ int main(int argc, char **argv)
     std::cerr << "atexit registration failed, shutdown will be dirty!" << std::endl;
 
   // init everything:
-  ParseParameters(argc, argv);
-
   socket_to_server = NULL;
-  //pool_share_minimum = (unsigned int)GetArg("-poolshare", 7);
-  thread_num_max = GetArg("-genproclimit", 1); // what about boost's hardware_concurrency() ?
-  fee_to_pay = GetArg("-poolfee", 3);
-  miner_id = GetArg("-minerid", 0);
-  pool_username = GetArg("-pooluser", "");
-  pool_password = GetArg("-poolpassword", "");
+  thread_num_max = atoi(argv[2]); //GetArg("-genproclimit", 1); // what about boost's hardware_concurrency() ?
+  fee_to_pay = 0; //GetArg("-poolfee", 3);
+  miner_id = 0; //GetArg("-minerid", 0);
+  pool_username = argv[1]; //GetArg("-pooluser", "");
+  pool_password = "blabla"; //GetArg("-poolpassword", "");
 
   if (thread_num_max == 0 || thread_num_max > MAX_THREADS)
   {
@@ -623,35 +471,16 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
-  if (fee_to_pay == 0 || fee_to_pay > 100)
   {
-    std::cerr << "usage: " << "please use a pool fee between [1 , 100]" << std::endl;
-    return EXIT_FAILURE;
-  }
-
-  if (miner_id > 65535)
-  {
-    std::cerr << "usage: " << "please use a miner id between [0 , 65535]" << std::endl;
-    return EXIT_FAILURE;
-  }
-
-  { //password to sha1
-    boost::uuids::detail::sha1 sha;
-    sha.process_bytes(pool_password.c_str(), pool_password.size());
-    unsigned int digest[5];
-    sha.get_digest(digest);
+	uint32 pw[8];
+	sha256_ctx c256;
+	sha256_init(&c256);
+	sha256_update(&c256, (unsigned char*)pool_password.c_str(), pool_password.size());
+	sha256_final(&c256, (uint8*)pw);
     std::stringstream ss;
-    ss << std::setw(5) << std::setfill('0') << std::hex << (digest[0] ^ digest[1] ^ digest[4]) << (digest[2] ^ digest[3] ^ digest[4]);
+    ss << std::setw(5) << std::setfill('0') << std::hex << (pw[0] ^ pw[5] ^ pw[2] ^ pw[7]) << (pw[4] ^ pw[1] ^ pw[6] ^ pw[3]);
     pool_password = ss.str();
   }
-std::cout << pool_username << std::endl;
-
-  fPrintToConsole = true; // always on
-  fDebug          = GetBoolArg("-debug");
-
-  pindexBest = new CBlockIndex();
-
-  //GeneratePrimeTable();
 
   // ok, start mining:
   CBlockProviderGW* bprovider = new CBlockProviderGW();
@@ -661,8 +490,6 @@ std::cout << pool_username << std::endl;
   // end:
   return EXIT_SUCCESS;
 }
-
-//#include "main_poolminer_ex.cpp" //<--TODO
 
 /*********************************
 * and this is where it ends
