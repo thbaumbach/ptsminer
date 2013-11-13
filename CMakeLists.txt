@@ -54,6 +54,6 @@ TARGET_LINK_LIBRARIES(ptsminer ${Boost_THREAD_LIBRARY})
 ###
 ### COMMON FLAGS
 ###
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -Wall -O2") # let's keep it simple
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -O2") # let's keep it simple
 #SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2")
-#SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DGLIBC_XX_DEBUG -ggdb -g3 -fno-rounding-math -msse -O0")
+#SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DGLIBC_XX_DEBUG -Wall -ggdb -g3 -fno-rounding-math -msse -O0")

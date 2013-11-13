@@ -14,7 +14,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 5
-#define VERSION_EXT "RC0"
+#define VERSION_EXT "RC0 <experimental>"
 
 #define MAX_THREADS 64
 
