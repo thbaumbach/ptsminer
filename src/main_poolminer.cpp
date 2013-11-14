@@ -14,7 +14,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 5
-#define VERSION_EXT "RC0 <experimental>"
+#define VERSION_EXT "RC1 <experimental> HOTFIX-1"
 
 #define MAX_THREADS 64
 
@@ -49,10 +49,13 @@ public:
 	}
 
 	virtual blockHeader_t* getBlock(unsigned int thread_id, unsigned int last_time) {
-		boost::unique_lock<boost::shared_mutex> lock(_mutex_getwork);
-		if (_block == NULL) return NULL;
-		blockHeader_t* block = new blockHeader_t;
-		memcpy(block, _block, 80+32+8);
+		blockHeader_t* block = NULL;
+		{
+			boost::shared_lock<boost::shared_mutex> lock(_mutex_getwork);
+			if (_block == NULL) return NULL;
+			block = new blockHeader_t;
+			memcpy(block, _block, 80+32+8);
+		}		
 		unsigned int new_time = GetAdjustedTimeWithOffset(thread_id);
 		if (new_time == last_time)
 			new_time += thread_num_max;
@@ -63,6 +66,16 @@ public:
 	
 	virtual blockHeader_t* getOriginalBlock() {
 		return _block;
+	}
+	
+	virtual void setBlockTo(blockHeader_t* newblock) {
+		blockHeader_t* old_block = NULL;
+		{
+			boost::unique_lock<boost::shared_mutex> lock(_mutex_getwork);
+			old_block = _block;
+			_block = newblock;
+		}
+		if (old_block != NULL) delete old_block;
 	}
 
 	void setBlocksFromData(unsigned char* data) {
@@ -76,33 +89,18 @@ public:
 		unsigned int nTime_server = block->nTime;
 		nTime_offset = nTime_local > nTime_server ? 0 : (nTime_server-nTime_local);
 		//
-		blockHeader_t* old_block = NULL;
-		{
-			boost::unique_lock<boost::shared_mutex> lock(_mutex_getwork);
-			old_block = _block;
-			_block = block;
-		}
-		if (old_block != NULL) delete old_block;
+		setBlockTo(block);
 	}
 
 	void submitBlock(blockHeader_t *block) {
-		blockHeader_t submitblock; //!
-		memcpy((unsigned char*)&submitblock, (unsigned char*)block, 88);
-		std::cout << "[WORKER] collision found: " << submitblock.birthdayA << " <-> " << submitblock.birthdayB << " @ " << totalCollisionCount << std::endl;
-		boost::system::error_code submit_error = boost::asio::error::host_not_found;
-		boost::asio::write(*socket_to_server, boost::asio::buffer((unsigned char*)&submitblock, 88), boost::asio::transfer_all(), submit_error); //FaF
-		//if (submit_error)
-		//	std::cout << submit_error << " @ submit" << std::endl;
-	}
-
-	void forceReconnect() {
-		std::cout << "force reconnect if possible!" << std::endl;
-		//TODO: THREAD SAFETY
 		if (socket_to_server != NULL) {
-			boost::system::error_code close_error;
-			socket_to_server->close(close_error);
-			//if (close_error)
-			//	std::cout << close_error << " @ close" << std::endl;
+			blockHeader_t submitblock; //!
+			memcpy((unsigned char*)&submitblock, (unsigned char*)block, 88);
+			std::cout << "[WORKER] collision found: " << submitblock.birthdayA << " <-> " << submitblock.birthdayB << " @ " << totalCollisionCount << std::endl;
+			boost::system::error_code submit_error = boost::asio::error::host_not_found;
+			boost::asio::write(*socket_to_server, boost::asio::buffer((unsigned char*)&submitblock, 88), boost::asio::transfer_all(), submit_error); //FaF
+			//if (submit_error)
+			//	std::cout << submit_error << " @ submit" << std::endl;
 		}
 	}
 
@@ -191,11 +189,11 @@ public:
 		boost::system::error_code error_socket = boost::asio::error::host_not_found;
 		while (error_socket && endpoint != end)
 		{
-		  //socket->close();
-		  socket.reset(new boost::asio::ip::tcp::socket(io_service));
-		  boost::asio::ip::tcp::endpoint tcp_ep = *endpoint++;
-		  socket->connect(tcp_ep, error_socket);
-		  std::cout << "connecting to " << tcp_ep << std::endl;
+			//socket->close();
+			socket.reset(new boost::asio::ip::tcp::socket(io_service));
+			boost::asio::ip::tcp::endpoint tcp_ep = *endpoint++;
+			socket->connect(tcp_ep, error_socket);
+			std::cout << "connecting to " << tcp_ep << std::endl;
 		}
 		socket->set_option(nd_option);
 		socket->set_option(ka_option);
@@ -266,7 +264,8 @@ public:
 					}
 					if (len == buf_size) {
 						_bprovider->setBlocksFromData(buf);
-						std::cout << "[MASTER] work received"<< std::endl;
+						std::cout << "[MASTER] work received - ";
+						print256("sharetarget", (uint32*)(_bprovider->getOriginalBlock()->targetShare));
 					} else
 						std::cout << "error on read2a: " << len << " should be " << buf_size << std::endl;
 					delete[] buf;
@@ -316,7 +315,9 @@ public:
 			}
 		}
 
-		socket_to_server = NULL; //TODO: lock/mutex
+		_bprovider->setBlockTo(NULL);
+		socket_to_server = NULL; //TODO: lock/mutex		
+		std::cout << "no connection to the server, reconnecting in 10 seconds" << std::endl;
 		boost::this_thread::sleep(boost::posix_time::seconds(10));
 	}
   }
@@ -359,8 +360,10 @@ private:
 			if (it->first > 1) valid += it->second;
 		}
 		std::cout << "[STATS] " << t_end << " | ";
-		if ((t_end - t_start).total_seconds() > 0)
+		if ((t_end - t_start).total_seconds() > 0) {
 			std::cout << static_cast<double>(totalCollisionCount) / (static_cast<double>((t_end - t_start).total_seconds()) / 60.0) << " c/m | ";
+			std::cout << static_cast<double>(totalShareCount) / (static_cast<double>((t_end - t_start).total_seconds()) / 60.0) << " sh/m | ";			
+		}
 		if (valid+blocks+rejects+stale > 0) {
 			std::cout << "VL: " << valid+blocks << " (" << (static_cast<double>(valid+blocks) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%), ";
 			std::cout << "RJ: " << rejects << " (" << (static_cast<double>(rejects) / static_cast<double>(valid+blocks+rejects+stale)) * 100.0 << "%), ";

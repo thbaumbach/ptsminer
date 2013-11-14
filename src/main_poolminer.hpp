@@ -31,8 +31,8 @@ public:
 	~CBlockProvider() { }
 	virtual blockHeader_t* getBlock(unsigned int thread_id, unsigned int last_time) = 0;
 	virtual blockHeader_t* getOriginalBlock() = 0;
+	virtual void setBlockTo(blockHeader_t* newblock) = 0;
 	virtual void submitBlock(blockHeader_t* block) = 0;
-	virtual void forceReconnect() = 0;
 	virtual unsigned int GetAdjustedTimeWithOffset(unsigned int thread_id) = 0;
 };
 
@@ -48,7 +48,7 @@ void print256(const char* bfstr, uint32* v) {
 	for(ptrdiff_t i=7; i>=0; --i)
 		ss << std::setw(8) << std::setfill('0') << std::hex << v[i];
     ss.flush();
-    std::cout << bfstr << " " << ss.str().c_str() << std::endl;
+    std::cout << bfstr << ": " << ss.str().c_str() << std::endl;
 }
 
 bool protoshares_revalidateCollision(blockHeader_t* block, uint8* midHash, uint32 indexA, uint32 indexB, CBlockProvider* bp)
