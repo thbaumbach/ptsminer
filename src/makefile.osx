@@ -72,5 +72,6 @@ ptsminer: $(OBJS:obj/%=obj/%) obj/main_poolminer.o
 clean:
 	-rm -f bitcoind test_bitcoin
 	-rm -f obj/*.o
+	-rm -f obj/*.d
 
 FORCE:

@@ -44,7 +44,8 @@ ptsminer.exe: $(OBJS:obj/%=obj/%)
 	$(CXX) $(xCXXFLAGS) $(xLDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
 
 clean:
-	-rm -f obj/*.o
 	-rm -f ptsminer.exe
+	-rm -f obj/*.o
+	-rm -f obj/*.d
 
 FORCE:

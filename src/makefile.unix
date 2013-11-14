@@ -97,3 +97,4 @@ ptsminer: $(OBJS:obj/%=obj/%)
 clean:
 	-rm -f ptsminer
 	-rm -f obj/*.o
+	-rm -f obj/*.d
