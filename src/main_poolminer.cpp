@@ -64,7 +64,7 @@ public:
 	}
 	
 	virtual blockHeader_t* getOriginalBlock() {
-		boost::shared_lock<boost::shared_mutex> lock(_mutex_getwork);
+		//boost::shared_lock<boost::shared_mutex> lock(_mutex_getwork);
 		return _block;
 	}
 	
