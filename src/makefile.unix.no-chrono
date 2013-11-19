@@ -65,7 +65,7 @@ LIBS+= \
     HARDENING+=-D_FORTIFY_SOURCE=2
 #
 
-DEBUGFLAGS= -g -d
+DEBUGFLAGS= # -g -d
 
 # CXXFLAGS can be specified on the make command line, so we use xCXXFLAGS that only
 # adds some defaults in front. Unfortunately, CXXFLAGS=... $(CXXFLAGS) does not work.
