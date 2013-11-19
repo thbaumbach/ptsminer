@@ -29,7 +29,7 @@ class CBlockProvider {
 public:
 	CBlockProvider() { }
 	~CBlockProvider() { }
-	virtual blockHeader_t* getBlock(unsigned int thread_id, unsigned int last_time) = 0;
+	virtual blockHeader_t* getBlock(unsigned int thread_id, unsigned int last_time, unsigned int counter) = 0;
 	virtual blockHeader_t* getOriginalBlock() = 0;
 	virtual void setBlockTo(blockHeader_t* newblock) = 0;
 	virtual void submitBlock(blockHeader_t* block) = 0;

@@ -48,7 +48,7 @@ public:
 		return nTime_offset + ((((unsigned int)time(NULL) + thread_num_max) / thread_num_max) * thread_num_max) + thread_id;
 	}
 
-	virtual blockHeader_t* getBlock(unsigned int thread_id, unsigned int last_time) {
+	virtual blockHeader_t* getBlock(unsigned int thread_id, unsigned int last_time, unsigned int counter) {
 		blockHeader_t* block = NULL;
 		{
 			boost::shared_lock<boost::shared_mutex> lock(_mutex_getwork);
@@ -57,14 +57,14 @@ public:
 			memcpy(block, _block, 80+32+8);
 		}		
 		unsigned int new_time = GetAdjustedTimeWithOffset(thread_id);
-		if (new_time == last_time)
-			new_time += thread_num_max;
+		new_time += counter * thread_num_max;
 		block->nTime = new_time;
 		//std::cout << "[WORKER" << thread_id << "] got_work block=" << block->GetHash().ToString().c_str() << std::endl;
 		return block;
 	}
 	
 	virtual blockHeader_t* getOriginalBlock() {
+		boost::shared_lock<boost::shared_mutex> lock(_mutex_getwork);
 		return _block;
 	}
 	
@@ -134,11 +134,19 @@ public:
 		std::cout << "[WORKER" << _id << "] GoGoGo!" << std::endl;
 		boost::this_thread::sleep(boost::posix_time::seconds(1));
 		blockHeader_t* thrblock = NULL;
+		blockHeader_t* orgblock = NULL;
+		unsigned int blockcnt = 0;
 		while (running) {
-			thrblock = _bprovider->getBlock(_id, thrblock == NULL ? 0 : thrblock->nTime);
-			if (thrblock != NULL)
+			thrblock = _bprovider->getBlock(_id, thrblock == NULL ? 0 : thrblock->nTime, blockcnt);			
+			if (orgblock == _bprovider->getOriginalBlock()) {
+				++blockcnt;
+			} else {
+				orgblock = _bprovider->getOriginalBlock();
+				blockcnt = 0;
+			}
+			if (thrblock != NULL) {
 				protoshares_process_512(thrblock, _collisionMap, _bprovider);
-			else
+			} else
 				boost::this_thread::sleep(boost::posix_time::seconds(1));
 		}
 		std::cout << "[WORKER" << _id << "] Bye Bye!" << std::endl;
