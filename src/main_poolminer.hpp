@@ -8,9 +8,14 @@
 #include <boost/date_time/posix_time/posix_time_io.hpp>
 #include <cstring>
 
-#include "sha2.h"
+extern "C" {
+#include "sph_sha2.h"
+}
 
+typedef unsigned char uint8;
 typedef int sint32;
+typedef unsigned int uint32;
+typedef unsigned long uint64;
 
 typedef struct {
   // comments: BYTES <index> + <length>
@@ -64,16 +69,16 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8* midHash, uint3
         memcpy(tempHash+4, midHash, 32);
         // get birthday A
         *(uint32*)tempHash = indexA&~7;
-        sha512_ctx c512;
-        sha512_init(&c512);
-        sha512_update(&c512, tempHash, 32+4);
-        sha512_final(&c512, (unsigned char*)resultHash);
+        sph_sha512_context c512;
+        sph_sha512_init(&c512);
+        sph_sha512(&c512, tempHash, 32+4);
+        sph_sha512_close(&c512, (unsigned char*)resultHash);
         uint64 birthdayA = resultHash[ptrdiff_t(indexA&7)] >> (64ULL-SEARCH_SPACE_BITS);
         // get birthday B
         *(uint32*)tempHash = indexB&~7;
-        sha512_init(&c512);
-        sha512_update(&c512, tempHash, 32+4);
-        sha512_final(&c512, (unsigned char*)resultHash);
+        sph_sha512_init(&c512);
+        sph_sha512(&c512, tempHash, 32+4);
+        sph_sha512_close(&c512, (unsigned char*)resultHash);
         uint64 birthdayB = resultHash[ptrdiff_t(indexB&7)] >> (64ULL-SEARCH_SPACE_BITS);
         if( birthdayA != birthdayB )
         {
@@ -83,18 +88,18 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8* midHash, uint3
         totalCollisionCount += 2; // we can use every collision twice -> A B and B A (srsly?)
         //printf("Collision found %8d = %8d | num: %d\n", indexA, indexB, totalCollisionCount);
         
-		sha256_ctx c256;
+		sph_sha256_context c256;
 		
 		// get full block hash (for A B)
         block->birthdayA = indexA;
         block->birthdayB = indexB;
         uint8 proofOfWorkHash[32];        
-        sha256_init(&c256);
-        sha256_update(&c256, (unsigned char*)block, 80+8);
-        sha256_final(&c256, proofOfWorkHash);
-        sha256_init(&c256);
-        sha256_update(&c256, (unsigned char*)proofOfWorkHash, 32);
-        sha256_final(&c256, proofOfWorkHash);
+        sph_sha256_init(&c256);
+        sph_sha256(&c256, (unsigned char*)block, 80+8);
+        sph_sha256_close(&c256, proofOfWorkHash);
+        sph_sha256_init(&c256);
+        sph_sha256(&c256, (unsigned char*)proofOfWorkHash, 32);
+        sph_sha256_close(&c256, proofOfWorkHash);
         bool hashMeetsTarget = true;
         uint32* generatedHash32 = (uint32*)proofOfWorkHash;
         uint32* targetHash32 = (uint32*)block->targetShare;
@@ -113,18 +118,21 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8* midHash, uint3
         }
         if( hashMeetsTarget )
         {
+			print256("pow1",generatedHash32);
+			print256("trt",targetHash32);
                 totalShareCount++;
 				bp->submitBlock(block);
         }
+		
         // get full block hash (for B A)
         block->birthdayA = indexB;
         block->birthdayB = indexA;
-        sha256_init(&c256);
-        sha256_update(&c256, (unsigned char*)block, 80+8);
-        sha256_final(&c256, proofOfWorkHash);
-        sha256_init(&c256);
-        sha256_update(&c256, (unsigned char*)proofOfWorkHash, 32);
-        sha256_final(&c256, proofOfWorkHash);
+        sph_sha256_init(&c256);
+        sph_sha256(&c256, (unsigned char*)block, 80+8);
+        sph_sha256_close(&c256, proofOfWorkHash);
+        sph_sha256_init(&c256);
+        sph_sha256(&c256, (unsigned char*)proofOfWorkHash, 32);
+        sph_sha256_close(&c256, proofOfWorkHash);
         hashMeetsTarget = true;
         generatedHash32 = (uint32*)proofOfWorkHash;
         targetHash32 = (uint32*)block->targetShare;
@@ -143,6 +151,8 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8* midHash, uint3
         }
         if( hashMeetsTarget )
         {
+			print256("pow2",generatedHash32);
+			print256("trt",targetHash32);
                 totalShareCount++;
 				bp->submitBlock(block);
         }
@@ -161,14 +171,16 @@ void protoshares_process_512(blockHeader_t* block, uint32* collisionIndices, CBl
         // generate mid hash using sha256 (header hash)
 		blockHeader_t* ob = bp->getOriginalBlock();
         uint8 midHash[32];
-        sha256_ctx c256;
-        sha256_init(&c256);
-        sha256_update(&c256, (unsigned char*)block, 80);
-        sha256_final(&c256, midHash);
-		//print256("midHash1", (uint32*)midHash);
-        sha256_init(&c256);
-        sha256_update(&c256, (unsigned char*)midHash, 32);
-        sha256_final(&c256, midHash);
+		{
+			sph_sha256_context c256;
+			sph_sha256_init(&c256);
+			sph_sha256(&c256, (unsigned char*)block, 80);
+			sph_sha256_close(&c256, midHash);
+			//print256("midHash1", (uint32*)midHash);
+			sph_sha256_init(&c256);
+			sph_sha256(&c256, (unsigned char*)midHash, 32);
+			sph_sha256_close(&c256, midHash);
+		}
 		//print256("midHash2", (uint32*)midHash);
         // init collision map
         //if( __collisionMap == NULL )
@@ -177,7 +189,7 @@ void protoshares_process_512(blockHeader_t* block, uint32* collisionIndices, CBl
         // start search
         // uint8 midHash[64];
         uint8 tempHash[32+4];
-        sha512_ctx c512;
+        sph_sha512_context c512;
         uint64 resultHashStorage[8*CACHED_HASHES];
         memcpy(tempHash+4, midHash, 32);
 		
@@ -190,11 +202,13 @@ void protoshares_process_512(blockHeader_t* block, uint32* collisionIndices, CBl
                 //sha512(tempHash, 32+4, (unsigned char*)resultHash);
                 for(uint32 m=0; m<CACHED_HASHES; m++)
                 {
-                        sha512_init(&c512);
+                        sph_sha512_init(&c512);
                         *(uint32*)tempHash = n+m*8;
-                        sha512_update_final(&c512, tempHash, 32+4, (unsigned char*)(resultHashStorage+8*m));
+                        //sha512_update_final(&c512, tempHash, 32+4, (unsigned char*)(resultHashStorage+8*m));
 						//sha512_update(&c512, tempHash, 32+4);
 						//sha512_final((unsigned char*)(resultHashStorage+8*m), &c512);
+						sph_sha512(&c512, tempHash, 32+4);
+						sph_sha512_close(&c512, (unsigned char*)(resultHashStorage+8*m));
                 }
                 for(uint32 m=0; m<CACHED_HASHES; m++)
                 {

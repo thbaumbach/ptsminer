@@ -13,8 +13,8 @@
 #include "main_poolminer.hpp"
 
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 5
-#define VERSION_EXT "RC1 <experimental> HOTFIX-1"
+#define VERSION_MINOR 6
+#define VERSION_EXT "RC0 <experimental>"
 
 #define MAX_THREADS 64
 
@@ -273,7 +273,8 @@ public:
 					if (len == buf_size) {
 						_bprovider->setBlocksFromData(buf);
 						std::cout << "[MASTER] work received - ";
-						print256("sharetarget", (uint32*)(_bprovider->getOriginalBlock()->targetShare));
+						if (_bprovider->getOriginalBlock() != NULL) print256("sharetarget", (uint32*)(_bprovider->getOriginalBlock()->targetShare));
+						else std::cout << "<NULL>" << std::endl;
 					} else
 						std::cout << "error on read2a: " << len << " should be " << buf_size << std::endl;
 					delete[] buf;
@@ -484,10 +485,10 @@ int main(int argc, char **argv)
 
   {
 	uint32 pw[8];
-	sha256_ctx c256;
-	sha256_init(&c256);
-	sha256_update(&c256, (unsigned char*)pool_password.c_str(), pool_password.size());
-	sha256_final(&c256, (uint8*)pw);
+	sph_sha256_context c256;
+	sph_sha256_init(&c256);
+	sph_sha256(&c256, (unsigned char*)pool_password.c_str(), pool_password.size());
+	sph_sha256_close(&c256, (uint8*)pw);
     std::stringstream ss;
     ss << std::setw(5) << std::setfill('0') << std::hex << (pw[0] ^ pw[5] ^ pw[2] ^ pw[7]) << (pw[4] ^ pw[1] ^ pw[6] ^ pw[3]);
     pool_password = ss.str();

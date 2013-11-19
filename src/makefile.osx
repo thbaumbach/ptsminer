@@ -7,6 +7,8 @@
 # Originally by Laszlo Hanyecz (solar@heliacal.net)
 
 CXX=llvm-g++
+CC=llvm-gcc
+
 DEPSDIR=/opt/local
 
 INCLUDEPATHS= \
@@ -46,32 +48,43 @@ ifdef RELEASE
 # the same way.
 CFLAGS = -mmacosx-version-min=10.5 -arch i386 -O3
 else
-DEBUGFLAGS = -g
+DEBUGFLAGS = # -g
 endif
 
 # ppc doesn't work because we don't support big-endian
 CFLAGS += -Wall -Wextra -Wformat -Wformat-security -Wno-unused-parameter \
     $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
 
-OBJS= \
-	obj/main_poolminer.o \
-	obj/sha2.o
+OBJSCPP= \
+	obj/main_poolminer.opp
+
+OBJSC= \
+	obj/sha2big.oc \
+	obj/sha2.oc
 
 all: ptsminer
 
-obj/%.o: %.cpp
-	$(CXX) -c $(CFLAGS) -MMD -MF $(@:%.o=%.d) -o $@ $<
-	@cp $(@:%.o=%.d) $(@:%.o=%.P); \
+obj/%.opp: %.cpp
+	$(CXX) -c $(CFLAGS) -MMD -MF $(@:%.opp=%.d) -o $@ $<
+	@cp $(@:%.opp=%.d) $(@:%.opp=%.P); \
 	  sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
-	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.o=%.d) >> $(@:%.o=%.P); \
-	  rm -f $(@:%.o=%.d)
+	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.opp=%.d) >> $(@:%.opp=%.P); \
+	  rm -f $(@:%.opp=%.d)
+	  
+obj/%.oc: %.c
+	$(CC) -c $(CFLAGS) -MMD -MF $(@:%.oc=%.d) -o $@ $<
+	@cp $(@:%.oc=%.d) $(@:%.oc=%.P); \
+	  sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
+	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.oc=%.d) >> $(@:%.oc=%.P); \
+	  rm -f $(@:%.oc=%.d)
 
-ptsminer: $(OBJS:obj/%=obj/%) obj/main_poolminer.o
+ptsminer: $(OBJSCPP:obj/%=obj/%) $(OBJSC:obj/%=obj/%)
 	$(CXX) $(CFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
 
 clean:
-	-rm -f bitcoind test_bitcoin
-	-rm -f obj/*.o
+	-rm -f ptsminer
+	-rm -f obj/*.oc
+	-rm -f obj/*.opp
 	-rm -f obj/*.d
 
 FORCE:

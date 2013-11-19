@@ -16,6 +16,7 @@
 # to remove files.
 
 CXX ?= g++
+GCC ?= gcc
 
 DEPSDIR?=/usr/local
 BOOST_SUFFIX?=-mgw47-mt-s-1_54
@@ -42,21 +43,26 @@ LDFLAGS=-Wl,--dynamicbase -Wl,--nxcompat -Wl,--large-address-aware -static
 
 LIBS += -l kernel32 -l user32 -l gdi32 -l comdlg32 -l winspool -l winmm -l shell32 -l comctl32 -l ole32 -l oleaut32 -l uuid -l rpcrt4 -l advapi32 -l ws2_32 -l mswsock -l shlwapi
 
-OBJS= \
-  obj/main_poolminer.o \
-  obj/sha2.o
+OBJSCPP= \
+	obj/main_poolminer.opp
+
+OBJSC= \
+	obj/sha2big.oc \
+	obj/sha2.oc
 
 all: ptsminer.exe
 
-obj/%.o: %.cpp
-	$(CXX) -c $(CFLAGS) -o $@ $<
+obj/%.opp: %.cpp
+	$(CXX) -c $(CFLAGS) -MMD -MF $(@:%.opp=%.d) -o $@ $<
 
-ptsminer.exe: $(OBJS:obj/%=obj/%)
+obj/%.oc: %.c
+	$(GCC) -c $(CFLAGS) -MMD -MF $(@:%.oc=%.d) -o $@ $<
+
+ptsminer.exe: $(OBJSCPP:obj/%=obj/%) $(OBJSC:obj/%=obj/%)
 	$(CXX) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
 
 clean:
 	rm -f ptsminer.exe
-	rm -f obj/*.o
+	rm -f obj/*.oc
+	rm -f obj/*.opp
 	rm -f obj/*.d
-
-FORCE:

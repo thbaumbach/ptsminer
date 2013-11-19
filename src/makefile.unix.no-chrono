@@ -24,8 +24,7 @@ LIBS += \
    -l boost_system$(BOOST_LIB_SUFFIX) \
    -l boost_filesystem$(BOOST_LIB_SUFFIX) \
    -l boost_program_options$(BOOST_LIB_SUFFIX) \
-   -l boost_thread$(BOOST_LIB_SUFFIX) \
-   -l boost_chrono$(BOOST_LIB_SUFFIX)
+   -l boost_thread$(BOOST_LIB_SUFFIX)
 
 LIBS+= \
  -Wl,-B$(LMODE2) \
@@ -66,13 +65,16 @@ LIBS+= \
     HARDENING+=-D_FORTIFY_SOURCE=2
 #
 
-DEBUGFLAGS= # -g -d
+DEBUGFLAGS= -g -d
 
 # CXXFLAGS can be specified on the make command line, so we use xCXXFLAGS that only
 # adds some defaults in front. Unfortunately, CXXFLAGS=... $(CXXFLAGS) does not work.
 #-Wall -Wextra -Wformat -Wformat-security -Wno-unused-parameter
-xCOMPILEFLAGS=-O2 -pthread \
+xCXXFLAGS=-O2 -pthread \
     $(DEBUGFLAGS) $(DEFS) $(HARDENING) $(CXXFLAGS)
+
+xCFLAGS=-O2 -pthread \
+    $(DEBUGFLAGSDEBUGFLAGS) $(DEFS) $(HARDENING) $(CFLAGS)
 
 # LDFLAGS can be specified on the make command line, so we use xLDFLAGS that only
 # adds some defaults in front. Unfortunately, LDFLAGS=... $(LDFLAGS) does not work.
@@ -88,14 +90,14 @@ OBJSC= \
 all: ptsminer
 
 obj/%.opp: %.cpp
-	$(CXX) -c $(xCOMPILEFLAGS) -MMD -MF $(@:%.opp=%.d) -o $@ $<
+	$(CXX) -c $(xCXXFLAGS) -MMD -MF $(@:%.opp=%.d) -o $@ $<
 	@cp $(@:%.opp=%.d) $(@:%.opp=%.P); \
 	  sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
 	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.opp=%.d) >> $(@:%.opp=%.P); \
 	  rm -f $(@:%.opp=%.d)
 	  
 obj/%.oc: %.c
-	$(CC) -c $(xCOMPILEFLAGS) -MMD -MF $(@:%.oc=%.d) -o $@ $<
+	$(CC) -c $(xCFLAGS) -MMD -MF $(@:%.oc=%.d) -o $@ $<
 	@cp $(@:%.oc=%.d) $(@:%.oc=%.P); \
 	  sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
 	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.oc=%.d) >> $(@:%.oc=%.P); \
