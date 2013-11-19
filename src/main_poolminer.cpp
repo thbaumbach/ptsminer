@@ -12,6 +12,12 @@
 
 #include "main_poolminer.hpp"
 
+#if defined(__GNUG__) && !defined(__APPLE__)
+#include <sys/syscall.h>
+#include <sys/time.h> //depr?
+#include <sys/resource.h>
+#endif
+
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 6
 #define VERSION_EXT "RC0 <experimental>"
@@ -130,6 +136,13 @@ public:
 
 	void run() {
 		std::cout << "[WORKER" << _id << "] Hello, World!" << std::endl;
+		{
+			//set low priority
+#if defined(__GNUG__) && !defined(__APPLE__)
+			pid_t tid = (pid_t) syscall (SYS_gettid);
+			setpriority(PRIO_PROCESS, tid, 1);
+#endif
+		}
 		_master->wait_for_master();
 		std::cout << "[WORKER" << _id << "] GoGoGo!" << std::endl;
 		boost::this_thread::sleep(boost::posix_time::seconds(1));
@@ -445,7 +458,7 @@ int main(int argc, char **argv)
   std::cout << "********************************************" << std::endl;
   std::cout << "*** ptsminer - Pts Pool Miner v" << VERSION_MAJOR << "." << VERSION_MINOR << " " << VERSION_EXT << std::endl;
   std::cout << "*** by xolokram/TB - www.beeeeer.org - glhf" << std::endl;
-  std::cout << "*** thanks to jh00, testix & Co." << std::endl;
+  //std::cout << "*** thanks to jh00, testix & Co." << std::endl; // for no transactions in the network...
   std::cout << "***" << std::endl;
   std::cout << "*** press CTRL+C to exit" << std::endl;
   std::cout << "********************************************" << std::endl;

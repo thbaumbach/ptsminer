@@ -118,8 +118,6 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8* midHash, uint3
         }
         if( hashMeetsTarget )
         {
-			print256("pow1",generatedHash32);
-			print256("trt",targetHash32);
                 totalShareCount++;
 				bp->submitBlock(block);
         }
@@ -151,8 +149,6 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8* midHash, uint3
         }
         if( hashMeetsTarget )
         {
-			print256("pow2",generatedHash32);
-			print256("trt",targetHash32);
                 totalShareCount++;
 				bp->submitBlock(block);
         }

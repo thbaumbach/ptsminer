@@ -35,7 +35,8 @@ INCLUDE_DIRECTORIES("src")
 
 SET(SRC_FILES
   src/main_poolminer.cpp
-  src/sha2.cpp
+  src/sha2.c
+  src/sha2big.c
 )
 
 ###
@@ -50,10 +51,13 @@ ADD_EXECUTABLE(ptsminer
 ###
 TARGET_LINK_LIBRARIES(ptsminer ${Boost_SYSTEM_LIBRARY})
 TARGET_LINK_LIBRARIES(ptsminer ${Boost_THREAD_LIBRARY})
+TARGET_LINK_LIBRARIES(ptsminer z dl pthread)
 
 ###
 ### COMMON FLAGS
 ###
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -O2") # let's keep it simple
+SET(CMAKE_CC_FLAGS "${CMAKE_CC_FLAGS} -O2 -pthread") # let's keep it simple
+SET(CMAKE_C_FLAGS "${CMAKE_CC_FLAGS} -O2 -pthread") # ^
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -pthread") # ^
 #SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2")
 #SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DGLIBC_XX_DEBUG -Wall -ggdb -g3 -fno-rounding-math -msse -O0")
