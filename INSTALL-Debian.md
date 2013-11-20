@@ -1,4 +1,4 @@
-Install on Debian Protoshares Pool Miner (PTS Miner)
+Debian install of Protoshares Pool Miner (PTS Miner)
 ====================================================
 
 Debian Wheezy
