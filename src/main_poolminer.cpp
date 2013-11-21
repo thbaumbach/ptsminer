@@ -12,14 +12,16 @@
 
 #include "main_poolminer.hpp"
 
-#if defined(__GNUG__) && !defined(__APPLE__)
+#if defined(__GNUG__) && !defined(__MINGW32__) && !defined(__MINGW64__)
 #include <sys/syscall.h>
 #include <sys/time.h> //depr?
 #include <sys/resource.h>
+#elif defined(__MINGW32__) || defined(__MINGW64__)
+#include <windows.h>
 #endif
 
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 6
+#define VERSION_MINOR 7
 #define VERSION_EXT "RC0 <experimental>"
 
 #define MAX_THREADS 64
@@ -28,6 +30,8 @@
 * global variables, structs and extern functions
 *********************************/
 
+int COLLISION_TABLE_BITS;
+bool use_avxsse;
 size_t thread_num_max;
 static size_t fee_to_pay;
 static size_t miner_id;
@@ -65,7 +69,7 @@ public:
 		unsigned int new_time = GetAdjustedTimeWithOffset(thread_id);
 		new_time += counter * thread_num_max;
 		block->nTime = new_time;
-		//std::cout << "[WORKER" << thread_id << "] got_work block=" << block->GetHash().ToString().c_str() << std::endl;
+		//std::cout << "[WORKER" << thread_id << "] block @ " << new_time << std::endl;
 		return block;
 	}
 	
@@ -98,11 +102,11 @@ public:
 		setBlockTo(block);
 	}
 
-	void submitBlock(blockHeader_t *block) {
+	void submitBlock(blockHeader_t *block, unsigned int thread_id) {
 		if (socket_to_server != NULL) {
 			blockHeader_t submitblock; //!
 			memcpy((unsigned char*)&submitblock, (unsigned char*)block, 88);
-			std::cout << "[WORKER] collision found: " << submitblock.birthdayA << " <-> " << submitblock.birthdayB << " @ " << totalCollisionCount << std::endl;
+			std::cout << "[WORKER] collision found: " << submitblock.birthdayA << " <-> " << submitblock.birthdayB << " #" << totalCollisionCount << " @ " << submitblock.nTime << " by " << thread_id << std::endl;
 			boost::system::error_code submit_error = boost::asio::error::host_not_found;
 			boost::asio::write(*socket_to_server, boost::asio::buffer((unsigned char*)&submitblock, 88), boost::asio::transfer_all(), submit_error); //FaF
 			//if (submit_error)
@@ -131,37 +135,68 @@ public:
 
 	CWorkerThread(CMasterThreadStub *master, unsigned int id, CBlockProviderGW *bprovider)
 		: _collisionMap(NULL), _working_lock(NULL), _id(id), _master(master), _bprovider(bprovider), _thread(&CWorkerThread::run, this) {
-		_collisionMap = (uint32*)malloc(sizeof(uint32)*COLLISION_TABLE_SIZE);
+			_collisionMap = (uint32_t*)malloc(sizeof(uint32_t)*(1 << COLLISION_TABLE_BITS));
 		}
+		
+	template<int COLLISION_TABLE_SIZE, int COLLISION_KEY_MASK, SHAMODE shamode>
+	void mineloop() {
+		unsigned int blockcnt = 0;
+		blockHeader_t* thrblock = NULL;
+		blockHeader_t* orgblock = NULL;
+		while (running) {
+			if (orgblock != _bprovider->getOriginalBlock()) {
+				orgblock = _bprovider->getOriginalBlock();
+				blockcnt = 0;
+			}
+			thrblock = _bprovider->getBlock(_id, thrblock == NULL ? 0 : thrblock->nTime, blockcnt);
+			if (orgblock == _bprovider->getOriginalBlock()) {
+				++blockcnt;
+			}
+			if (thrblock != NULL) {
+				protoshares_process_512<COLLISION_TABLE_SIZE,COLLISION_KEY_MASK,shamode>(thrblock, _collisionMap, _bprovider, _id);
+			} else
+				boost::this_thread::sleep(boost::posix_time::seconds(1));
+		}
+	}
+	
+	template<SHAMODE shamode>
+	void mineloop_start() {
+		switch (COLLISION_TABLE_BITS) {
+			case 20: mineloop<(1<<20),(0xFFFFFFFF<<(32-(32-20))),shamode>(); break;
+			case 21: mineloop<(1<<21),(0xFFFFFFFF<<(32-(32-21))),shamode>(); break;
+			case 22: mineloop<(1<<22),(0xFFFFFFFF<<(32-(32-22))),shamode>(); break;
+			case 23: mineloop<(1<<23),(0xFFFFFFFF<<(32-(32-23))),shamode>(); break;
+			case 24: mineloop<(1<<24),(0xFFFFFFFF<<(32-(32-24))),shamode>(); break;
+			case 25: mineloop<(1<<25),(0xFFFFFFFF<<(32-(32-25))),shamode>(); break;
+			case 26: mineloop<(1<<26),(0xFFFFFFFF<<(32-(32-26))),shamode>(); break;
+			case 27: mineloop<(1<<27),(0xFFFFFFFF<<(32-(32-27))),shamode>(); break;
+			case 28: mineloop<(1<<28),(0xFFFFFFFF<<(32-(32-28))),shamode>(); break;
+			case 29: mineloop<(1<<29),(0xFFFFFFFF<<(32-(32-29))),shamode>(); break;
+			case 30: mineloop<(1<<30),(0xFFFFFFFF<<(32-(32-30))),shamode>(); break;
+			default: break;
+		}
+	}
 
 	void run() {
 		std::cout << "[WORKER" << _id << "] Hello, World!" << std::endl;
 		{
 			//set low priority
-#if defined(__GNUG__) && !defined(__APPLE__)
+#if defined(__GNUG__) && !defined(__MINGW32__) && !defined(__MINGW64__)
 			pid_t tid = (pid_t) syscall (SYS_gettid);
 			setpriority(PRIO_PROCESS, tid, 1);
+#elif defined(__MINGW32__) || defined(__MINGW64__)
+			HANDLE th = _thread.native_handle();
+			if (!SetThreadPriority(th, THREAD_PRIORITY_BELOW_NORMAL))
+				std::cerr << "failed to set thread priority to low" << std::endl;
 #endif
 		}
 		_master->wait_for_master();
 		std::cout << "[WORKER" << _id << "] GoGoGo!" << std::endl;
 		boost::this_thread::sleep(boost::posix_time::seconds(1));
-		blockHeader_t* thrblock = NULL;
-		blockHeader_t* orgblock = NULL;
-		unsigned int blockcnt = 0;
-		while (running) {
-			thrblock = _bprovider->getBlock(_id, thrblock == NULL ? 0 : thrblock->nTime, blockcnt);			
-			if (orgblock == _bprovider->getOriginalBlock()) {
-				++blockcnt;
-			} else {
-				orgblock = _bprovider->getOriginalBlock();
-				blockcnt = 0;
-			}
-			if (thrblock != NULL) {
-				protoshares_process_512(thrblock, _collisionMap, _bprovider);
-			} else
-				boost::this_thread::sleep(boost::posix_time::seconds(1));
-		}
+		if (use_avxsse)
+			mineloop_start<AVXSSE>(); // <-- work loop
+		else
+			mineloop_start<SPHLIB>(); // ^
 		std::cout << "[WORKER" << _id << "] Bye Bye!" << std::endl;
 	}
 
@@ -170,7 +205,7 @@ public:
 	}
 
 protected:
-  uint32* _collisionMap;
+  uint32_t* _collisionMap;
   boost::shared_lock<boost::shared_mutex> *_working_lock;
   unsigned int _id;
   CMasterThreadStub *_master;
@@ -223,6 +258,9 @@ public:
 			std::cout << error_socket << std::endl;
 			boost::this_thread::sleep(boost::posix_time::seconds(10));
 			continue;
+		} else {
+			totalCollisionCount = 0;
+			totalShareCount = 0;
 		}
 
 		{ //send hello message
@@ -286,7 +324,7 @@ public:
 					if (len == buf_size) {
 						_bprovider->setBlocksFromData(buf);
 						std::cout << "[MASTER] work received - ";
-						if (_bprovider->getOriginalBlock() != NULL) print256("sharetarget", (uint32*)(_bprovider->getOriginalBlock()->targetShare));
+						if (_bprovider->getOriginalBlock() != NULL) print256("sharetarget", (uint32_t*)(_bprovider->getOriginalBlock()->targetShare));
 						else std::cout << "<NULL>" << std::endl;
 					} else
 						std::cout << "error on read2a: " << len << " should be " << buf_size << std::endl;
@@ -455,65 +493,111 @@ void ctrl_handler(int signum) {
 *********************************/
 int main(int argc, char **argv)
 {
-  std::cout << "********************************************" << std::endl;
-  std::cout << "*** ptsminer - Pts Pool Miner v" << VERSION_MAJOR << "." << VERSION_MINOR << " " << VERSION_EXT << std::endl;
-  std::cout << "*** by xolokram/TB - www.beeeeer.org - glhf" << std::endl;
-  //std::cout << "*** thanks to jh00, testix & Co." << std::endl; // for no transactions in the network...
-  std::cout << "***" << std::endl;
-  std::cout << "*** press CTRL+C to exit" << std::endl;
-  std::cout << "********************************************" << std::endl;
+	std::cout << "********************************************" << std::endl;
+	std::cout << "*** ptsminer - Pts Pool Miner v" << VERSION_MAJOR << "." << VERSION_MINOR << " " << VERSION_EXT << std::endl;
+	std::cout << "*** by xolokram/TB - www.beeeeer.org - glhf" << std::endl;
+	//std::cout << "*** thanks to jh00, testix & Co." << std::endl; //...for no transactions in the network? pff!
+	std::cout << "***" << std::endl;
+	std::cout << "*** press CTRL+C to exit" << std::endl;
+	std::cout << "********************************************" << std::endl;
+	
+	if (argc < 3 || argc > 4)
+	{
+		std::cerr << "usage: " << argv[0] << " <payout-address> <threads-to-use> [memory-option]" << std::endl;
+		std::cerr << "memory-option: integer value" << std::endl;
+		std::cerr << "\t\t20 -->    4 MB per thread (not recommended)" << std::endl;
+		std::cerr << "\t\t21 -->    8 MB per thread (not recommended)" << std::endl;
+		std::cerr << "\t\t22 -->   16 MB per thread (not recommended)" << std::endl;
+		std::cerr << "\t\t23 -->   32 MB per thread (not recommended)" << std::endl;
+		std::cerr << "\t\t24 -->   64 MB per thread (not recommended)" << std::endl;
+		std::cerr << "\t\t25 -->  128 MB per thread" << std::endl;
+		std::cerr << "\t\t26 -->  256 MB per thread" << std::endl;
+		std::cerr << "\t\t27 -->  512 MB per thread (default)" << std::endl;
+		std::cerr << "\t\t28 --> 1024 MB per thread" << std::endl;
+		std::cerr << "\t\t29 --> 2048 MB per thread" << std::endl;
+		std::cerr << "\t\t30 --> 4096 MB per thread" << std::endl;
+		return EXIT_FAILURE;
+	}
 
-  t_start = boost::posix_time::second_clock::local_time();
-  running = true;
+#ifdef	__x86_64__
+	processor_info_t proc_info;
+	cpuid_basic_identify(&proc_info);
 
-#if defined(__MINGW32__) || defined(__MINGW64__)
-  SetConsoleCtrlHandler(ctrl_handler, TRUE);
-#elif defined(__GNUG__) && !defined(__APPLE__)
-  set_signal_handler(SIGINT, ctrl_handler);
+	if (proc_info.proc_type == PROC_X64_INTEL || proc_info.proc_type == PROC_X64_AMD) {
+		if (Init_SHA512(&proc_info) == 0) {
+			use_avxsse = true;
+			std::cout << "using AVX/SSE" << std::endl;
+		} else {
+			use_avxsse = false;
+			std::cout << "unsupported AVX Level :( using sphlib" << std::endl;
+		}
+	} else {
+		use_avxsse = false;
+		std::cout << "unsupported Architecture :( using sphlib" << std::endl;
+	}
+#else
+	use_avxsse = false;
+	std::cout << "using sphlib" << std::endl;
 #endif
 
-  if (argc != 3)
-  {
-    std::cerr << "usage: " << argv[0] << " <user> <threads-to-use>" << std::endl;
-    return EXIT_FAILURE;
-  }
+	t_start = boost::posix_time::second_clock::local_time();
+	running = true;
 
-  const int atexit_res = std::atexit(exit_handler);
-  if (atexit_res != 0)
-    std::cerr << "atexit registration failed, shutdown will be dirty!" << std::endl;
+#if defined(__MINGW32__) || defined(__MINGW64__)
+	SetConsoleCtrlHandler(ctrl_handler, TRUE);
+#elif defined(__GNUG__) && !defined(__APPLE__)
+	set_signal_handler(SIGINT, ctrl_handler);
+#endif
 
-  // init everything:
-  socket_to_server = NULL;
-  thread_num_max = atoi(argv[2]); //GetArg("-genproclimit", 1); // what about boost's hardware_concurrency() ?
-  fee_to_pay = 0; //GetArg("-poolfee", 3);
-  miner_id = 0; //GetArg("-minerid", 0);
-  pool_username = argv[1]; //GetArg("-pooluser", "");
-  pool_password = "blabla"; //GetArg("-poolpassword", "");
+	const int atexit_res = std::atexit(exit_handler);
+	if (atexit_res != 0)
+		std::cerr << "atexit registration failed, shutdown will be dirty!" << std::endl;
 
-  if (thread_num_max == 0 || thread_num_max > MAX_THREADS)
-  {
-    std::cerr << "usage: " << "current maximum supported number of threads = " << MAX_THREADS << std::endl;
-    return EXIT_FAILURE;
-  }
+	// init everything:
+	socket_to_server = NULL;
+	thread_num_max = atoi(argv[2]); //GetArg("-genproclimit", 1); // what about boost's hardware_concurrency() ?
+	if (argc == 4)
+		COLLISION_TABLE_BITS = atoi(argv[3]);
+	else
+		COLLISION_TABLE_BITS = 27;
+	fee_to_pay = 0; //GetArg("-poolfee", 3);
+	miner_id = 0; //GetArg("-minerid", 0);
+	pool_username = argv[1]; //GetArg("-pooluser", "");
+	pool_password = "blabla"; //GetArg("-poolpassword", "");
+	
+	if (COLLISION_TABLE_BITS < 20 || COLLISION_TABLE_BITS > 30)
+	{
+		std::cerr << "unsupported memory option, choose a value between 20 and 31" << std::endl;
+		return EXIT_FAILURE;
+	}
 
-  {
-	uint32 pw[8];
-	sph_sha256_context c256;
-	sph_sha256_init(&c256);
-	sph_sha256(&c256, (unsigned char*)pool_password.c_str(), pool_password.size());
-	sph_sha256_close(&c256, (uint8*)pw);
-    std::stringstream ss;
-    ss << std::setw(5) << std::setfill('0') << std::hex << (pw[0] ^ pw[5] ^ pw[2] ^ pw[7]) << (pw[4] ^ pw[1] ^ pw[6] ^ pw[3]);
-    pool_password = ss.str();
-  }
+	if (thread_num_max == 0 || thread_num_max > MAX_THREADS)
+	{
+		std::cerr << "usage: " << "current maximum supported number of threads = " << MAX_THREADS << std::endl;
+		return EXIT_FAILURE;
+	}
 
-  // ok, start mining:
-  CBlockProviderGW* bprovider = new CBlockProviderGW();
-  CMasterThread *mt = new CMasterThread(bprovider);
-  mt->run();
+	{
+		unsigned char pw[32];
+		//SPH
+		sph_sha256_context c256_sph;		
+		sph_sha256_init(&c256_sph);
+		sph_sha256(&c256_sph, (unsigned char*)pool_password.c_str(), pool_password.size());
+		sph_sha256_close(&c256_sph, pw);
+		//print256("sph",(uint32_t*)pw);
+		//
+		std::stringstream ss;
+		ss << std::setw(5) << std::setfill('0') << std::hex << (pw[0] ^ pw[5] ^ pw[2] ^ pw[7]) << (pw[4] ^ pw[1] ^ pw[6] ^ pw[3]);
+		pool_password = ss.str();	
+	}
 
-  // end:
-  return EXIT_SUCCESS;
+	// ok, start mining:
+	CBlockProviderGW* bprovider = new CBlockProviderGW();
+	CMasterThread *mt = new CMasterThread(bprovider);
+	mt->run();
+
+	// end:
+	return EXIT_SUCCESS;
 }
 
 /*********************************

@@ -70,44 +70,38 @@ DEBUGFLAGS= # -g -d
 # CXXFLAGS can be specified on the make command line, so we use xCXXFLAGS that only
 # adds some defaults in front. Unfortunately, CXXFLAGS=... $(CXXFLAGS) does not work.
 #-Wall -Wextra -Wformat -Wformat-security -Wno-unused-parameter
-xCXXFLAGS=-O2 -pthread \
-    $(DEBUGFLAGS) $(DEFS) $(HARDENING) $(CXXFLAGS)
-
-xCFLAGS=-O2 -pthread \
-    $(DEBUGFLAGSDEBUGFLAGS) $(DEFS) $(HARDENING) $(CFLAGS)
+xCOMPILEFLAGS=-pthread $(DEBUGFLAGS) $(DEFS) $(HARDENING) $(CXXFLAGS)
 
 # LDFLAGS can be specified on the make command line, so we use xLDFLAGS that only
 # adds some defaults in front. Unfortunately, LDFLAGS=... $(LDFLAGS) does not work.
 xLDFLAGS=$(LDHARDENING) $(LDFLAGS)
 
-OBJSCPP= \
-	obj/main_poolminer.opp
-
-OBJSC= \
-	obj/sha2big.oc \
-	obj/sha2.oc
+OBJS= \
+	obj/cpuid.o \
+	obj/sha512_avx.o \
+	obj/sha512_sse4.o \
+	obj/sha512.o \
+	obj/sph_sha2.o \
+	obj/sph_sha2big.o \
+	obj/main_poolminer.o
 
 all: ptsminer
 
-obj/%.opp: %.cpp
-	$(CXX) -c $(xCXXFLAGS) -MMD -MF $(@:%.opp=%.d) -o $@ $<
-	@cp $(@:%.opp=%.d) $(@:%.opp=%.P); \
-	  sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
-	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.opp=%.d) >> $(@:%.opp=%.P); \
-	  rm -f $(@:%.opp=%.d)
-	  
-obj/%.oc: %.c
-	$(CC) -c $(xCFLAGS) -MMD -MF $(@:%.oc=%.d) -o $@ $<
-	@cp $(@:%.oc=%.d) $(@:%.oc=%.P); \
-	  sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
-	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.oc=%.d) >> $(@:%.oc=%.P); \
-	  rm -f $(@:%.oc=%.d)
+obj/%.o: %.cpp
+	$(CXX) -c -O2 $(DEBUGFLAGS) $(xCOMPILEFLAGS) -o $@ $<
 
-ptsminer: $(OBJSCPP:obj/%=obj/%) $(OBJSC:obj/%=obj/%)
-	$(LINK) $(xCXXFLAGS) -o $@ $^ $(xLDFLAGS) $(LIBS)
+obj/sph_*.o: sph_*.c
+	$(CXX) -c -O1 $(DEBUGFLAGS) -fpermissive -o $@ $<
+
+obj/%.o: %.c
+	$(CXX) -c -O2 $(DEBUGFLAGS) -fpermissive -o $@ $<
+
+obj/%.o: intel/%.asm
+	yasm -f elf64 -o $@ $<
+
+ptsminer: $(OBJS:obj/%=obj/%)
+	$(CXX) $(xLDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
 
 clean:
-	-rm -f ptsminer
-	-rm -f obj/*.oc
-	-rm -f obj/*.opp
-	-rm -f obj/*.d
+	rm -f ptsminer
+	rm -f obj/*.o

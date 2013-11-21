@@ -33,6 +33,10 @@
 #include <stddef.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "sph_sha2.h"
 
 #if SPH_SMALL_FOOTPRINT && !defined SPH_SMALL_FOOTPRINT_SHA2
@@ -688,3 +692,7 @@ sph_sha224_comp(const sph_u32 msg[16], sph_u32 val[8])
 	SHA2_ROUND_BODY(SHA2_IN, val);
 #undef SHA2_IN
 }
+
+#ifdef __cplusplus
+}
+#endif

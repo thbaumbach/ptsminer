@@ -33,6 +33,10 @@
 #include <stddef.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "sph_sha2.h"
 
 #if SPH_64
@@ -243,5 +247,9 @@ sph_sha384_comp(const sph_u64 msg[16], sph_u64 val[8])
 	SHA3_ROUND_BODY(SHA3_IN, val);
 #undef SHA3_IN
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
