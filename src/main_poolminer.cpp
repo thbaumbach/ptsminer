@@ -186,7 +186,7 @@ public:
 			setpriority(PRIO_PROCESS, tid, 1);
 #elif defined(__MINGW32__) || defined(__MINGW64__)
 			HANDLE th = _thread.native_handle();
-			if (!SetThreadPriority(th, THREAD_PRIORITY_BELOW_NORMAL))
+			if (!SetThreadPriority(th, THREAD_PRIORITY_LOWEST))
 				std::cerr << "failed to set thread priority to low" << std::endl;
 #endif
 		}
@@ -519,6 +519,7 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
+	use_avxsse = false;
 #ifdef	__x86_64__
 	processor_info_t proc_info;
 	cpuid_basic_identify(&proc_info);
@@ -535,10 +536,9 @@ int main(int argc, char **argv)
 		use_avxsse = false;
 		std::cout << "unsupported Architecture :( using sphlib" << std::endl;
 	}
-#else
-	use_avxsse = false;
-	std::cout << "using sphlib" << std::endl;
 #endif
+	if (!use_avxsse)
+		std::cout << "using sphlib" << std::endl;
 
 	t_start = boost::posix_time::second_clock::local_time();
 	running = true;
