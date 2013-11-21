@@ -16,7 +16,7 @@ Debian Squeeze
 --------------
 Install the dependencies:
 
-apt-get install build-essential libboost-system-dev libboost-filesystem-dev libboost-program-options-dev libboost-thread-dev zlib1g-dev
+apt-get install build-essential libboost-system-dev libboost-filesystem-dev libboost-program-options-dev libboost-thread-dev zlib1g-dev yasm
 
 Compile the miner
 

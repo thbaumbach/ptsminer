@@ -34,9 +34,11 @@ LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})
 INCLUDE_DIRECTORIES("src")
 
 SET(SRC_FILES
-  src/main_poolminer.cpp
-  src/sha2.c
-  src/sha2big.c
+	src/cpuid.c
+	src/sha512.c
+	src/sph_sha2.c
+	src/sph_sha2big.c
+	src/main_poolminer.cpp
 )
 
 ###
@@ -57,7 +59,7 @@ TARGET_LINK_LIBRARIES(ptsminer z dl pthread)
 ### COMMON FLAGS
 ###
 SET(CMAKE_CC_FLAGS "${CMAKE_CC_FLAGS} -O2 -pthread") # let's keep it simple
-SET(CMAKE_C_FLAGS "${CMAKE_CC_FLAGS} -O2 -pthread") # ^
+SET(CMAKE_C_FLAGS "${CMAKE_CC_FLAGS} -O2 -pthread") # ^ <-- THIS is actually bad for SPHLIB
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -pthread") # ^
 #SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2")
 #SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DGLIBC_XX_DEBUG -Wall -ggdb -g3 -fno-rounding-math -msse -O0")

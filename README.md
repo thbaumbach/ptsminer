@@ -11,3 +11,6 @@ Features:
 - custom getworx-protocol
 - light-weight code
 - portable
+
+Build notes:
+you'll need libboost & yasm
