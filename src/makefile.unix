@@ -2,6 +2,8 @@
 # Distributed under the MIT/X11 software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+linuxdist=$(shell ./osfinder.sh)
+
 LINK:=$(CXX)
 
 DEFS=-DBOOST_SPIRIT_THREADSAFE -D_FILE_OFFSET_BITS=64
@@ -18,14 +20,27 @@ ifdef STATIC
 	endif
 endif
 
+# No boost_chrono and append '-mt' to boost_thread for Redhat family
+ifeq ($(linuxdist),redhat)
+	BOOSTLIBOPTS=	-l boost_system$(BOOST_LIB_SUFFIX) \
+	-l boost_filesystem$(BOOST_LIB_SUFFIX) \
+	-l boost_program_options$(BOOST_LIB_SUFFIX) \
+	-l boost_thread-mt$(BOOST_LIB_SUFFIX)
+endif
+
+# if Debian or something else, use the default ;-)
+ifeq ($(linuxdist),$(filter $(linuxdist),debian unknown))
+	BOOSTLIBOPTS=	-l boost_system$(BOOST_LIB_SUFFIX) \
+	-l boost_filesystem$(BOOST_LIB_SUFFIX) \
+	-l boost_program_options$(BOOST_LIB_SUFFIX) \
+	-l boost_thread$(BOOST_LIB_SUFFIX) \
+	-l boost_chrono$(BOOST_LIB_SUFFIX)
+endif
+
 # for boost 1.37, add -mt to the boost libraries
 LIBS += \
  -Wl,-B$(LMODE) \
-   -l boost_system$(BOOST_LIB_SUFFIX) \
-   -l boost_filesystem$(BOOST_LIB_SUFFIX) \
-   -l boost_program_options$(BOOST_LIB_SUFFIX) \
-   -l boost_thread$(BOOST_LIB_SUFFIX) \
-   -l boost_chrono$(BOOST_LIB_SUFFIX)
+ $(BOOSTLIBOPTS)
 
 LIBS+= \
  -Wl,-B$(LMODE2) \
