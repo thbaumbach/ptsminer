@@ -156,23 +156,17 @@ static const uint64_t iv256[SHA512_HASH_WORDS] = {
 
 static update_func_ptr sha512_update_func;
 
-#ifdef	__x86_64__
-int
-Init_SHA512 (processor_info_t *pc)
+void
+Init_SHA512_avx ()
 {
-	if (pc->proc_type == PROC_X64_INTEL || pc->proc_type == PROC_X64_AMD) {
-		if (pc->avx_level > 0) {
-			sha512_update_func = sha512_avx;
-		} else if (pc->sse_level >= 4) {
-			sha512_update_func = sha512_sse4;
-		} else {
-			return (1);
-		}
-		return (0);
-	}
-	return (1);
+	sha512_update_func = sha512_avx;
 }
-#endif
+
+void
+Init_SHA512_sse ()
+{
+	sha512_update_func = sha512_sse4;
+}
 
 static void
 _init (SHA512_Context *sc, const uint64_t iv[SHA512_HASH_WORDS])

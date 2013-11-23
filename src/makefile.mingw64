@@ -43,31 +43,76 @@ LDFLAGS=-Wl,--dynamicbase -Wl,--nxcompat -static
 LIBS += -l kernel32 -l user32 -l gdi32 -l comdlg32 -l winspool -l winmm -l shell32 -l comctl32 -l ole32 -l oleaut32 -l uuid -l rpcrt4 -l advapi32 -l ws2_32 -l mswsock -l shlwapi
 
 OBJS= \
-	obj/cpuid.o \
-	obj/sha512_avx.o \
-	obj/sha512_sse4.o \
+	obj/sha512_avx.o_asm \
+	obj/sha512_sse4.o_asm \
 	obj/sha512.o \
 	obj/sph_sha2.o \
 	obj/sph_sha2big.o \
 	obj/main_poolminer.o
 
-all: ptsminer.exe
+GENFLAGS_INTEL=-march=nocona -msse -msse2 -msse3
+GENFLAGS_AMD=-march=athlon64 -msse -msse2 # includes 3DNow
+SSE4FLAGS=$(GENFLAGS_INTEL) -msse3 -msse4 -msse4.1 -msse4.2
+AVXFLAGS=$(SSE4FLAGS) -mavx
 
-obj/%.o: %.cpp
-	$(CXX) -c -O2 -mtune=native -march=native $(CFLAGS) -o $@ $<
+all: ptsminer_amd.exe ptsminer_intel.exe ptsminer_sse4.exe ptsminer_avx.exe
 
-obj/%.o: %.c
-	$(CXX) -c -O2 -mtune=native -march=native -fpermissive -o $@ $<
+#
+# GENERIC (AMD)
+#
+obj/%.o_amd: %.cpp
+	$(CXX) -c -O2 $(GENFLAGS_AMD) $(CFLAGS) -o $@ $<
+obj/sph_%.o_amd: sph_%.c
+	$(CXX) -c -O1 $(GENFLAGS_AMD) $(DEBUGFLAGS) -fpermissive -o $@ $<
+obj/%.o_amd: %.c
+	$(CXX) -c -O2 $(GENFLAGS_AMD) $(DEBUGFLAGS) -fpermissive -o $@ $<
 
-obj/sph_*.o: sph_*.c
-	$(CXX) -c -O1 $(DEBUGFLAGS) -fpermissive -o $@ $<
+#
+# GENERIC (INTEL)
+#
+obj/%.o_intel: %.cpp
+	$(CXX) -c -O2 $(GENFLAGS_INTEL) $(CFLAGS) -o $@ $<
+obj/sph_%.o_intel: sph_%.c
+	$(CXX) -c -O1 $(GENFLAGS_INTEL) $(DEBUGFLAGS) -fpermissive -o $@ $<
+obj/%.o_intel: %.c
+	$(CXX) -c -O2 $(GENFLAGS_INTEL) $(DEBUGFLAGS) -fpermissive -o $@ $<	
 
-obj/%.o: intel/%.asm
-	yasm -f x64 -D WINABI -o $@ $<
+#
+# SSE4
+#
+obj/%.o_sse4: %.cpp
+	$(CXX) -c -O2 $(SSE4FLAGS) $(CFLAGS) -o $@ $<
+obj/sph_%.o_sse4: sph_%.c
+	$(CXX) -c -O1 $(SSE4FLAGS) $(DEBUGFLAGS) -fpermissive -o $@ $<
+obj/%.o_sse4: %.c
+	$(CXX) -c -O2 $(SSE4FLAGS) $(DEBUGFLAGS) -fpermissive -o $@ $<
+	
+#
+# AVX
+#
+obj/%.o_avx: %.cpp
+	$(CXX) -c -O2 $(AVXFLAGS) $(CFLAGS) -o $@ $<
+obj/sph_%.o_avx: sph_%.c
+	$(CXX) -c -O1 $(AVXFLAGS) $(DEBUGFLAGS) -fpermissive -o $@ $<
+obj/%.o_avx: %.c
+	$(CXX) -c -O2 $(AVXFLAGS) $(DEBUGFLAGS) -fpermissive -o $@ $<
 
-ptsminer.exe: $(OBJS:obj/%=obj/%)
+#
+# ASM
+#
+obj/%.o_asm: intel/%.asm
+	yasm -f win64 -D WINABI -o $@ $<
+
+ptsminer_amd.exe: $(OBJS:obj/%.o=obj/%.o_amd)
+	$(CXX) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
+ptsminer_intel.exe: $(OBJS:obj/%.o=obj/%.o_intel)
+	$(CXX) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
+ptsminer_sse4.exe: $(OBJS:obj/%.o=obj/%.o_sse4)
+	$(CXX) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
+ptsminer_avx.exe: $(OBJS:obj/%.o=obj/%.o_avx)
 	$(CXX) $(CFLAGS) $(LDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
 
 clean:
-	rm -f ptsminer.exe
+	rm -f ptsminer*.exe
 	rm -f obj/*.o
+	rm -f obj/*.o_*

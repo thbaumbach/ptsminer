@@ -15,7 +15,7 @@ extern "C" {
 #include "sha512.h"
 #endif
 
-enum SHAMODE { SPHLIB = 0, AVXSSE };
+enum SHAMODE { SPHLIB = 0, AVXSSE4 };
 
 typedef struct {
   // comments: BYTES <index> + <length>
@@ -70,7 +70,7 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8_t* midHash, uin
         memcpy(tempHash+4, midHash, 32);
 		uint64_t birthdayA, birthdayB;
 #ifdef	__x86_64__
-		if (shamode == AVXSSE) {
+		if (shamode == AVXSSE4) {
 			// get birthday A
 			*(uint32_t*)tempHash = indexA&~7;
 			//AVX/SSE			
@@ -211,16 +211,16 @@ void protoshares_process_512(blockHeader_t* block, uint32_t* collisionIndices, C
                         *(uint32_t*)tempHash = n+m*8;
 						//AVX/SSE
 #ifdef	__x86_64__
-						if (shamode == AVXSSE) {
-						SHA512_Init(&c512_avxsse);
-						SHA512_Update(&c512_avxsse, tempHash, 32+4);
-						SHA512_Final(&c512_avxsse, (unsigned char*)(resultHashStorage+8*m));
+						if (shamode == AVXSSE4) {
+							SHA512_Init(&c512_avxsse);
+							SHA512_Update(&c512_avxsse, tempHash, 32+4);
+							SHA512_Final(&c512_avxsse, (unsigned char*)(resultHashStorage+8*m));
 						} else {
 #endif
 						//SPH
-						sph_sha512_init(&c512_sph);
-						sph_sha512(&c512_sph, tempHash, 32+4);
-						sph_sha512_close(&c512_sph, (unsigned char*)(resultHashStorage+8*m));
+							sph_sha512_init(&c512_sph);
+							sph_sha512(&c512_sph, tempHash, 32+4);
+							sph_sha512_close(&c512_sph, (unsigned char*)(resultHashStorage+8*m));
 #ifdef	__x86_64__
 						}
 #endif

@@ -55,8 +55,6 @@
 
 #include <stdint.h>
 
-#include "cpuid.h"
-
 #define	SHA512_HASH_SIZE		64
 #define	SHA512_BLOCK_SIZE		128L
 
@@ -77,9 +75,8 @@ typedef struct _SHA512_Context {
 extern "C" {
 #endif
 
-#ifdef	__x86_64__
-int  Init_SHA512 (processor_info_t *pc);
-#endif
+void Init_SHA512_avx();
+void Init_SHA512_sse();
 
 void SHA512_Init (SHA512_Context *sc);
 void SHA512_Update (SHA512_Context *sc, const void *data, size_t len);

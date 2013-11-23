@@ -22,7 +22,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 7
-#define VERSION_EXT "RC0 <experimental>"
+#define VERSION_EXT "RC1 <experimental>"
 
 #define MAX_THREADS 64
 
@@ -31,7 +31,7 @@
 *********************************/
 
 int COLLISION_TABLE_BITS;
-bool use_avxsse;
+bool use_avxsse4;
 size_t thread_num_max;
 static size_t fee_to_pay;
 static size_t miner_id;
@@ -195,8 +195,8 @@ public:
 		_master->wait_for_master();
 		std::cout << "[WORKER" << _id << "] GoGoGo!" << std::endl;
 		boost::this_thread::sleep(boost::posix_time::seconds(1));
-		if (use_avxsse)
-			mineloop_start<AVXSSE>(); // <-- work loop
+		if (use_avxsse4)
+			mineloop_start<AVXSSE4>(); // <-- work loop
 		else
 			mineloop_start<SPHLIB>(); // ^
 		std::cout << "[WORKER" << _id << "] Bye Bye!" << std::endl;
@@ -351,7 +351,6 @@ public:
 						std::cout << "[MASTER] submitted share -> " <<
 							(retval == 0 ? "REJECTED" : retval < 0 ? "STALE" : retval ==
 							1 ? "BLOCK" : "SHARE") << std::endl;
-						std::map<int,unsigned long>::iterator it = statistics.find(retval);
 						if (retval > 0)
 							reject_counter = 0;
 						else
@@ -361,11 +360,14 @@ public:
 //  						socket->close();
 //  						done = true;
 //  					}
-						if (it == statistics.end())
-							statistics.insert(std::pair<int,unsigned long>(retval,1));
-						else
-							statistics[retval]++;
-						stats_running();
+						{
+							std::map<int,unsigned long>::iterator it = statistics.find(retval);
+							if (it == statistics.end())
+								statistics.insert(std::pair<int,unsigned long>(retval,1));
+							else
+								statistics[retval]++;
+							stats_running();
+						}
 					} else
 						std::cout << "error on read2b: " << len << " should be " << buf_size << std::endl;
 				} break;
@@ -491,6 +493,29 @@ void ctrl_handler(int signum) {
 
 #endif
 
+void print_help(const char* _exec) {
+	std::cerr << "usage: " << _exec << " <payout-address> <threads-to-use> <mode> [memory-option]" << std::endl;
+	std::cerr << "mode: string - mining implementation" << std::endl;
+	std::cerr << "\t\tavx --> use AVX (Intel optimized)" << std::endl;
+	std::cerr << "\t\tsse --> use SSE4 (Intel optimized)" << std::endl;
+	std::cerr << "\t\tsph --> use SPHLIB" << std::endl;
+	std::cerr << "memory-option: integer value - memory usage" << std::endl;
+	std::cerr << "\t\t20 -->    4 MB per thread (not recommended)" << std::endl;
+	std::cerr << "\t\t21 -->    8 MB per thread (not recommended)" << std::endl;
+	std::cerr << "\t\t22 -->   16 MB per thread (not recommended)" << std::endl;
+	std::cerr << "\t\t23 -->   32 MB per thread (not recommended)" << std::endl;
+	std::cerr << "\t\t24 -->   64 MB per thread (not recommended)" << std::endl;
+	std::cerr << "\t\t25 -->  128 MB per thread" << std::endl;
+	std::cerr << "\t\t26 -->  256 MB per thread" << std::endl;
+	std::cerr << "\t\t27 -->  512 MB per thread (default)" << std::endl;
+	std::cerr << "\t\t28 --> 1024 MB per thread" << std::endl;
+	std::cerr << "\t\t29 --> 2048 MB per thread" << std::endl;
+	std::cerr << "\t\t30 --> 4096 MB per thread" << std::endl;
+	std::cerr << std::endl;
+	std::cerr << "example:" << std::endl;
+	std::cerr << "> " << _exec << " PbfspbvSWxYqrp3DpRH7bsrmEqzY3418Ap sse 25" << std::endl;
+}
+
 /*********************************
 * main - this is where it begins
 *********************************/
@@ -504,44 +529,29 @@ int main(int argc, char **argv)
 	std::cout << "*** press CTRL+C to exit" << std::endl;
 	std::cout << "********************************************" << std::endl;
 	
-	if (argc < 3 || argc > 4)
+	if (argc < 4 || argc > 5)
 	{
-		std::cerr << "usage: " << argv[0] << " <payout-address> <threads-to-use> [memory-option]" << std::endl;
-		std::cerr << "memory-option: integer value" << std::endl;
-		std::cerr << "\t\t20 -->    4 MB per thread (not recommended)" << std::endl;
-		std::cerr << "\t\t21 -->    8 MB per thread (not recommended)" << std::endl;
-		std::cerr << "\t\t22 -->   16 MB per thread (not recommended)" << std::endl;
-		std::cerr << "\t\t23 -->   32 MB per thread (not recommended)" << std::endl;
-		std::cerr << "\t\t24 -->   64 MB per thread (not recommended)" << std::endl;
-		std::cerr << "\t\t25 -->  128 MB per thread" << std::endl;
-		std::cerr << "\t\t26 -->  256 MB per thread" << std::endl;
-		std::cerr << "\t\t27 -->  512 MB per thread (default)" << std::endl;
-		std::cerr << "\t\t28 --> 1024 MB per thread" << std::endl;
-		std::cerr << "\t\t29 --> 2048 MB per thread" << std::endl;
-		std::cerr << "\t\t30 --> 4096 MB per thread" << std::endl;
+		print_help(argv[0]);
 		return EXIT_FAILURE;
 	}
 
-	use_avxsse = false;
-#ifdef	__x86_64__
-	processor_info_t proc_info;
-	cpuid_basic_identify(&proc_info);
-
-	if (proc_info.proc_type == PROC_X64_INTEL || proc_info.proc_type == PROC_X64_AMD) {
-		if (Init_SHA512(&proc_info) == 0) {
-			use_avxsse = true;
-			std::cout << "using AVX/SSE" << std::endl;
-		} else {
-			use_avxsse = false;
-			std::cout << "unsupported AVX Level :( using sphlib" << std::endl;
-		}
-	} else {
-		use_avxsse = false;
-		std::cout << "unsupported Architecture :( using sphlib" << std::endl;
-	}
-#endif
-	if (!use_avxsse)
+	use_avxsse4 = false;
+	std::string mode_param(argv[3]);
+	if (mode_param == "avx") {
+		Init_SHA512_avx();
+		use_avxsse4 = true;
+		std::cout << "using AVX" << std::endl;
+	} else if (mode_param == "sse4") {
+		Init_SHA512_sse();
+		use_avxsse4 = true;
+		std::cout << "using SSE4" << std::endl;
+	} else if (mode_param == "sph") {
 		std::cout << "using sphlib" << std::endl;
+	} else {
+		std::cout << "invalid mode" << std::endl << std::endl;
+		print_help(argv[0]);
+		return EXIT_FAILURE;
+	}
 
 	t_start = boost::posix_time::second_clock::local_time();
 	running = true;
@@ -559,8 +569,8 @@ int main(int argc, char **argv)
 	// init everything:
 	socket_to_server = NULL;
 	thread_num_max = atoi(argv[2]); //GetArg("-genproclimit", 1); // what about boost's hardware_concurrency() ?
-	if (argc == 4)
-		COLLISION_TABLE_BITS = atoi(argv[3]);
+	if (argc == 5)
+		COLLISION_TABLE_BITS = atoi(argv[4]);
 	else
 		COLLISION_TABLE_BITS = 27;
 	fee_to_pay = 0; //GetArg("-poolfee", 3);
