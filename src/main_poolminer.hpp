@@ -142,10 +142,7 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8_t* midHash, uin
                 }
         }
         if( hashMeetsTarget )
-        {
-                totalShareCount++;
-				bp->submitBlock(block, thread_id);
-        }
+			bp->submitBlock(block, thread_id);
 		
         // get full block hash (for B A)
         block->birthdayA = indexB;
@@ -174,11 +171,9 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8_t* midHash, uin
                 }
         }
         if( hashMeetsTarget )
-        {
-                totalShareCount++;
-				bp->submitBlock(block, thread_id);
-        }
-        return true;
+			bp->submitBlock(block, thread_id);
+
+		return true;
 }
 
 #define CACHED_HASHES         (32)

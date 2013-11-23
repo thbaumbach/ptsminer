@@ -111,6 +111,8 @@ public:
 			boost::asio::write(*socket_to_server, boost::asio::buffer((unsigned char*)&submitblock, 88), boost::asio::transfer_all(), submit_error); //FaF
 			//if (submit_error)
 			//	std::cout << submit_error << " @ submit" << std::endl;
+			if (!submit_error)
+				++totalShareCount;
 		}
 	}
 
