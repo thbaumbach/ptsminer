@@ -261,6 +261,7 @@ public:
 			boost::this_thread::sleep(boost::posix_time::seconds(10));
 			continue;
 		} else {
+			t_start = boost::posix_time::second_clock::local_time();
 			totalCollisionCount = 0;
 			totalShareCount = 0;
 		}
