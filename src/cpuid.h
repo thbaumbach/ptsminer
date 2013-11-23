@@ -66,9 +66,6 @@
 #define MAX_EXT_CPUID_LEVEL     32
 #define MAX_INTELFN4_LEVEL      4
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 typedef enum {
 	PROC_BIGENDIAN_GENERIC = 1,
 	PROC_LITENDIAN_GENERIC,
@@ -106,10 +103,6 @@ struct cpu_raw_data_t {
 
 void cpuid_get_raw_data(struct cpu_raw_data_t* data);
 void cpuid_basic_identify(processor_info_t *pc);
-
-#ifdef __cplusplus
-}
-#endif /* extern "C" */
 
 #endif /* __x86_64__ */
 

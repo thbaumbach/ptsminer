@@ -76,6 +76,8 @@
  * @author   Thomas Pornin <thomas.pornin@cryptolog.com>
  */
 
+#pragma GCC diagnostic ignored "-fpermissive"
+ 
 #ifdef _MSC_VER
 #pragma warning (disable: 4146)
 #endif

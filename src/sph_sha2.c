@@ -29,6 +29,8 @@
  *
  * @author   Thomas Pornin <thomas.pornin@cryptolog.com>
  */
+ 
+#pragma GCC diagnostic ignored "-fpermissive"
 
 #include <stddef.h>
 #include <string.h>
