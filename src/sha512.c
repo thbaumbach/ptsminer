@@ -95,6 +95,13 @@ bswap_64 (unsigned long long __x)
 #define BYTESWAP(x) bswap_32(x)
 #define BYTESWAP64(x) bswap_64(x)
 
+#elif defined(__APPLE__)
+
+#include <libkern/OSByteOrder.h>
+
+#define BYTESWAP(x) OSSwapBigToHostInt32(x)
+#define BYTESWAP64(x) OSSwapBigToHostInt64(x)
+
 #else
 
 #include <endian.h> //glibc
@@ -102,7 +109,7 @@ bswap_64 (unsigned long long __x)
 #define BYTESWAP(x) be32toh(x)
 #define BYTESWAP64(x) be64toh(x)
 
-#endif
+#endif /* defined(__MINGW32__) || defined(__MINGW64__) */
 
 typedef void (*update_func_ptr)(const void *input_data, void *digest, uint64_t num_blks);
 

@@ -128,7 +128,7 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8_t* midHash, uin
         bool hashMeetsTarget = true;
         uint32_t* generatedHash32 = (uint32_t*)proofOfWorkHash;
         uint32_t* targetHash32 = (uint32_t*)block->targetShare;
-        for(uint64_t hc=7; hc>=0; hc--)
+        for(uint64_t hc=7; hc!=0; hc--)
         {
                 if( generatedHash32[hc] < targetHash32[hc] )
                 {
@@ -157,7 +157,7 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8_t* midHash, uin
         hashMeetsTarget = true;
         generatedHash32 = (uint32_t*)proofOfWorkHash;
         targetHash32 = (uint32_t*)block->targetShare;
-        for(uint64_t hc=7; hc>=0; hc--)
+        for(uint64_t hc=7; hc!=0; hc--)
         {
                 if( generatedHash32[hc] < targetHash32[hc] )
                 {

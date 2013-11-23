@@ -25,6 +25,17 @@ MESSAGE("  Boost_LIBRARY_DIRS: ${Boost_LIBRARY_DIRS}")
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
 LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})
 
+if (APPLE)
+    set(CMAKE_ASM_FLAGS "-f macho64 --prefix=_")
+else (UNIX)
+    SET(CMAKE_ASM_FLAGS "-f elf")
+else ()
+    SET(CMAKE_ASM_FLAGS "-f win32")
+endif()
+
+SET(CMAKE_ASM_COMPILER "yasm")
+enable_language(ASM)
+
 #SET(Boost_USE_STATIC_LIBS ON)
 #SET(Boost_USE_MULTITHREAD ON)
 
@@ -39,6 +50,8 @@ SET(SRC_FILES
 	src/sph_sha2.c
 	src/sph_sha2big.c
 	src/main_poolminer.cpp
+	src/intel/sha512_avx.asm
+	src/intel/sha512_sse4.asm
 )
 
 ###
