@@ -22,7 +22,7 @@
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 7
-#define VERSION_EXT "RC1 <experimental>"
+#define VERSION_EXT "RC2 <experimental>"
 
 #define MAX_THREADS 64
 
@@ -556,28 +556,21 @@ int main(int argc, char **argv)
 			return EXIT_FAILURE;
 		}
 	} else {
-#if defined(__MINGW32__) || defined(__MINGW64__)
-		std::string exec_param(argv[0]);
-		if (exec_param.find("_avx.exe") != std::string::npos) {
-			Init_SHA512_avx();
-			use_avxsse4 = true;
-			std::cout << "using AVX" << std::endl;
-		} else if (exec_param.find("_sse4.exe") != std::string::npos) {
-			Init_SHA512_sse4();
-			use_avxsse4 = true;
-			std::cout << "using SSE4" << std::endl;
-		} else {
-			std::cout << "using SPHLIB" << std::endl;
-		}
-#elif defined(__GNUG__) && !defined(__APPLE__)
-		std::cout << "###" << std::endl;
-		std::cout << "### SET YOUR PREFERED MINING IMPLEMENTATION MANUALLY IF NOT DONE ALREADY" << std::endl;
-		std::cout << "### -FIXING COMING ASAP-" << std::endl;
-		std::cout << "###" << std::endl;
-		std::cout << "### run: " << argv[0] << " help" << std::endl;
-		std::cout << "###" << std::endl;
-		std::cout << "using SPHLIB" << std::endl;
-#endif
+		processor_info_t proc_info;
+		cpuid_basic_identify(&proc_info);
+		if (proc_info.proc_type == PROC_X64_INTEL || proc_info.proc_type == PROC_X64_AMD) {
+			if (proc_info.avx_level > 0) {
+				Init_SHA512_avx();
+				use_avxsse4 = true;
+				std::cout << "using AVX" << std::endl;
+			} else if (proc_info.sse_level >= 4) {
+				Init_SHA512_sse4();
+				use_avxsse4 = true;
+				std::cout << "using SSE4" << std::endl;
+			} else
+				std::cout << "using SPHLIB (no avx/sse4)" << std::endl;
+		} else
+			std::cout << "using SPHLIB (unsupported arch)" << std::endl;
 	}
 
 	t_start = boost::posix_time::second_clock::local_time();
@@ -589,8 +582,6 @@ int main(int argc, char **argv)
 	set_signal_handler(SIGINT, ctrl_handler);
 #endif
 
-
-
 	const int atexit_res = std::atexit(exit_handler);
 	if (atexit_res != 0)
 		std::cerr << "atexit registration failed, shutdown will be dirty!" << std::endl;
@@ -598,7 +589,7 @@ int main(int argc, char **argv)
 	// init everything:
 	socket_to_server = NULL;
 	thread_num_max = atoi(argv[2]); //GetArg("-genproclimit", 1); // what about boost's hardware_concurrency() ?
-	if (argc == 5)
+	if (argc == 4 || argc == 5)
 		COLLISION_TABLE_BITS = atoi(argv[3]);
 	else
 		COLLISION_TABLE_BITS = 27;

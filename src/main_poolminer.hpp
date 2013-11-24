@@ -11,6 +11,7 @@
 extern "C" {
 #include "sph_sha2.h"
 }
+#include "cpuid.h"
 #include "sha512.h"
 
 enum SHAMODE { SPHLIB = 0, AVXSSE4 };
