@@ -76,7 +76,7 @@ extern "C" {
 #endif
 
 void Init_SHA512_avx();
-void Init_SHA512_sse();
+void Init_SHA512_sse4();
 
 void SHA512_Init (SHA512_Context *sc);
 void SHA512_Update (SHA512_Context *sc, const void *data, size_t len);

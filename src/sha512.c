@@ -163,7 +163,7 @@ Init_SHA512_avx ()
 }
 
 void
-Init_SHA512_sse ()
+Init_SHA512_sse4 ()
 {
 	sha512_update_func = sha512_sse4;
 }

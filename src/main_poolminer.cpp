@@ -494,11 +494,8 @@ void ctrl_handler(int signum) {
 #endif
 
 void print_help(const char* _exec) {
-	std::cerr << "usage: " << _exec << " <payout-address> <threads-to-use> <mode> [memory-option]" << std::endl;
-	std::cerr << "mode: string - mining implementation" << std::endl;
-	std::cerr << "\t\tavx --> use AVX (Intel optimized)" << std::endl;
-	std::cerr << "\t\tsse --> use SSE4 (Intel optimized)" << std::endl;
-	std::cerr << "\t\tsph --> use SPHLIB" << std::endl;
+	std::cerr << "usage: " << _exec << " <payout-address> <threads-to-use> [memory-option] [mode]" << std::endl;
+	std::cerr << std::endl;
 	std::cerr << "memory-option: integer value - memory usage" << std::endl;
 	std::cerr << "\t\t20 -->    4 MB per thread (not recommended)" << std::endl;
 	std::cerr << "\t\t21 -->    8 MB per thread (not recommended)" << std::endl;
@@ -512,8 +509,13 @@ void print_help(const char* _exec) {
 	std::cerr << "\t\t29 --> 2048 MB per thread" << std::endl;
 	std::cerr << "\t\t30 --> 4096 MB per thread" << std::endl;
 	std::cerr << std::endl;
+	std::cerr << "mode: string - mining implementation" << std::endl;
+	std::cerr << "\t\tavx --> use AVX (Intel optimized)" << std::endl;
+	std::cerr << "\t\tsse4 --> use SSE4 (Intel optimized)" << std::endl;
+	std::cerr << "\t\tsph --> use SPHLIB" << std::endl;
+	std::cerr << std::endl;
 	std::cerr << "example:" << std::endl;
-	std::cerr << "> " << _exec << " PbfspbvSWxYqrp3DpRH7bsrmEqzY3418Ap sse 25" << std::endl;
+	std::cerr << "> " << _exec << " PbfspbvSWxYqrp3DpRH7bsrmEqzY3418Ap 4 25 sse4" << std::endl;
 }
 
 /*********************************
@@ -529,28 +531,52 @@ int main(int argc, char **argv)
 	std::cout << "*** press CTRL+C to exit" << std::endl;
 	std::cout << "********************************************" << std::endl;
 	
-	if (argc < 4 || argc > 5)
+	if (argc < 3 || argc > 5)
 	{
 		print_help(argv[0]);
 		return EXIT_FAILURE;
 	}
 
 	use_avxsse4 = false;
-	std::string mode_param(argv[3]);
-	if (mode_param == "avx") {
-		Init_SHA512_avx();
-		use_avxsse4 = true;
-		std::cout << "using AVX" << std::endl;
-	} else if (mode_param == "sse4") {
-		Init_SHA512_sse();
-		use_avxsse4 = true;
-		std::cout << "using SSE4" << std::endl;
-	} else if (mode_param == "sph") {
-		std::cout << "using sphlib" << std::endl;
+	if (argc == 5) {
+		std::string mode_param(argv[4]);
+		if (mode_param == "avx") {
+			Init_SHA512_avx();
+			use_avxsse4 = true;
+			std::cout << "using AVX" << std::endl;
+		} else if (mode_param == "sse4") {
+			Init_SHA512_sse4();
+			use_avxsse4 = true;
+			std::cout << "using SSE4" << std::endl;
+		} else if (mode_param == "sph") {
+			std::cout << "using sphlib" << std::endl;
+		} else {
+			std::cout << "invalid mode" << std::endl << std::endl;
+			print_help(argv[0]);
+			return EXIT_FAILURE;
+		}
 	} else {
-		std::cout << "invalid mode" << std::endl << std::endl;
-		print_help(argv[0]);
-		return EXIT_FAILURE;
+#if defined(__MINGW32__) || defined(__MINGW64__)
+		std::string exec_param(argv[0]);
+		if (exec_param.find("_avx.exe") != std::string::npos) {
+			Init_SHA512_avx();
+			use_avxsse4 = true;
+			std::cout << "using AVX" << std::endl;
+		} else if (exec_param.find("_sse4.exe") != std::string::npos) {
+			Init_SHA512_sse4();
+			use_avxsse4 = true;
+			std::cout << "using SSE4" << std::endl;
+		} else {
+			std::cout << "using sphlib" << std::endl;
+		}
+#elif defined(__GNUG__) && !defined(__APPLE__)
+		std::cout << "###" << std::endl;
+		std::cout << "### SET YOUR PREFERED MINING IMPLEMENTATION MANUALLY IF NOT DONE ALREADY" << std::endl;
+		std::cout << "### -FIXING COMING ASAP-" << std::endl;
+		std::cout << "###" << std::endl;
+		std::cout << "### run: " << argv[0] << " help" << std::endl;
+		std::cout << "###" << std::endl;
+#endif
 	}
 
 	t_start = boost::posix_time::second_clock::local_time();
@@ -562,6 +588,8 @@ int main(int argc, char **argv)
 	set_signal_handler(SIGINT, ctrl_handler);
 #endif
 
+
+
 	const int atexit_res = std::atexit(exit_handler);
 	if (atexit_res != 0)
 		std::cerr << "atexit registration failed, shutdown will be dirty!" << std::endl;
@@ -570,7 +598,7 @@ int main(int argc, char **argv)
 	socket_to_server = NULL;
 	thread_num_max = atoi(argv[2]); //GetArg("-genproclimit", 1); // what about boost's hardware_concurrency() ?
 	if (argc == 5)
-		COLLISION_TABLE_BITS = atoi(argv[4]);
+		COLLISION_TABLE_BITS = atoi(argv[3]);
 	else
 		COLLISION_TABLE_BITS = 27;
 	fee_to_pay = 0; //GetArg("-poolfee", 3);
