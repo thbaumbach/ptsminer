@@ -28,8 +28,24 @@ ifeq ($(linuxdist),redhat)
 	-l boost_thread-mt$(BOOST_LIB_SUFFIX)
 endif
 
-# if Debian or something else, use the default ;-)
-ifeq ($(linuxdist),$(filter $(linuxdist),debian unknown))
+# if Debian 6, link without lib_chrono, else use everything
+ifeq ($(linuxdist),debian)
+debian_version = $(shell cat /etc/debian_version | sed 's/\..*$$//g')
+ifeq ($(debian_version),6)
+	BOOSTLIBOPTS=	-l boost_system$(BOOST_LIB_SUFFIX) \
+	-l boost_filesystem$(BOOST_LIB_SUFFIX) \
+	-l boost_program_options$(BOOST_LIB_SUFFIX) \
+	-l boost_thread$(BOOST_LIB_SUFFIX)
+else	# debian 7.x and all others until further notice
+	BOOSTLIBOPTS=	-l boost_system$(BOOST_LIB_SUFFIX) \
+	-l boost_filesystem$(BOOST_LIB_SUFFIX) \
+	-l boost_program_options$(BOOST_LIB_SUFFIX) \
+	-l boost_thread$(BOOST_LIB_SUFFIX) \
+	-l boost_chrono$(BOOST_LIB_SUFFIX)
+endif
+endif
+
+ifeq ($(linuxdist),unknown)
 	BOOSTLIBOPTS=	-l boost_system$(BOOST_LIB_SUFFIX) \
 	-l boost_filesystem$(BOOST_LIB_SUFFIX) \
 	-l boost_program_options$(BOOST_LIB_SUFFIX) \
