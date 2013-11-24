@@ -67,7 +67,7 @@ all: ptsminer
 
 obj/%.o: %.cpp
 	$(CXX) -c -O2 $(DEBUGFLAGS) $(xCOMPILEFLAGS) -o $@ $<
-obj/sph_*.o: sph_*.c
+obj/sph_%.o: sph_%.c
 	$(CXX) -c -O1 $(DEBUGFLAGS) -fpermissive -o $@ $<
 obj/%.o: %.c
 	$(CXX) -c -O2 $(DEBUGFLAGS) -fpermissive -o $@ $<

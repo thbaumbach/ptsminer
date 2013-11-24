@@ -11,9 +11,7 @@
 extern "C" {
 #include "sph_sha2.h"
 }
-#ifdef	__x86_64__
 #include "sha512.h"
-#endif
 
 enum SHAMODE { SPHLIB = 0, AVXSSE4 };
 
@@ -69,7 +67,6 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8_t* midHash, uin
         uint64_t resultHash[8];
         memcpy(tempHash+4, midHash, 32);
 		uint64_t birthdayA, birthdayB;
-#ifdef	__x86_64__
 		if (shamode == AVXSSE4) {
 			// get birthday A
 			*(uint32_t*)tempHash = indexA&~7;
@@ -86,7 +83,6 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8_t* midHash, uin
 			SHA512_Final(&c512_avxsse, (unsigned char*)resultHash);
 			birthdayB = resultHash[ptrdiff_t(indexB&7)] >> (64ULL-SEARCH_SPACE_BITS);
 		} else {
-#endif
 			// get birthday A
 			*(uint32_t*)tempHash = indexA&~7;
 			//SPH
@@ -101,9 +97,7 @@ bool protoshares_revalidateCollision(blockHeader_t* block, uint8_t* midHash, uin
 			sph_sha512(&c512_sph, tempHash, 32+4);
 			sph_sha512_close(&c512_sph, (unsigned char*)resultHash);
 			birthdayB = resultHash[ptrdiff_t(indexB&7)] >> (64ULL-SEARCH_SPACE_BITS);
-#ifdef	__x86_64__
 		}
-#endif
         if( birthdayA != birthdayB )
         {
                 return false; // invalid collision
@@ -197,9 +191,7 @@ void protoshares_process_512(blockHeader_t* block, uint32_t* collisionIndices, C
         memset(collisionIndices, 0x00, sizeof(uint32_t)*COLLISION_TABLE_SIZE);
         // start search
         uint8_t tempHash[32+4];
-#ifdef	__x86_64__
 		SHA512_Context c512_avxsse; //AVX/SSE
-#endif
 		sph_sha512_context c512_sph; //SPH
         uint64_t resultHashStorage[8*CACHED_HASHES];
         memcpy(tempHash+4, midHash, 32);
@@ -209,21 +201,17 @@ void protoshares_process_512(blockHeader_t* block, uint32_t* collisionIndices, C
                 for(uint32_t m=0; m<CACHED_HASHES; m++)
                 {
                         *(uint32_t*)tempHash = n+m*8;
-						//AVX/SSE
-#ifdef	__x86_64__
 						if (shamode == AVXSSE4) {
+							//AVX/SSE
 							SHA512_Init(&c512_avxsse);
 							SHA512_Update(&c512_avxsse, tempHash, 32+4);
 							SHA512_Final(&c512_avxsse, (unsigned char*)(resultHashStorage+8*m));
 						} else {
-#endif
-						//SPH
+							//SPH
 							sph_sha512_init(&c512_sph);
 							sph_sha512(&c512_sph, tempHash, 32+4);
 							sph_sha512_close(&c512_sph, (unsigned char*)(resultHashStorage+8*m));
-#ifdef	__x86_64__
 						}
-#endif
                 }
                 for(uint32_t m=0; m<CACHED_HASHES; m++)
                 {
