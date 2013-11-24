@@ -549,7 +549,7 @@ int main(int argc, char **argv)
 			use_avxsse4 = true;
 			std::cout << "using SSE4" << std::endl;
 		} else if (mode_param == "sph") {
-			std::cout << "using sphlib" << std::endl;
+			std::cout << "using SPHLIB" << std::endl;
 		} else {
 			std::cout << "invalid mode" << std::endl << std::endl;
 			print_help(argv[0]);
@@ -567,7 +567,7 @@ int main(int argc, char **argv)
 			use_avxsse4 = true;
 			std::cout << "using SSE4" << std::endl;
 		} else {
-			std::cout << "using sphlib" << std::endl;
+			std::cout << "using SPHLIB" << std::endl;
 		}
 #elif defined(__GNUG__) && !defined(__APPLE__)
 		std::cout << "###" << std::endl;
@@ -576,6 +576,7 @@ int main(int argc, char **argv)
 		std::cout << "###" << std::endl;
 		std::cout << "### run: " << argv[0] << " help" << std::endl;
 		std::cout << "###" << std::endl;
+		std::cout << "using SPHLIB" << std::endl;
 #endif
 	}
 
