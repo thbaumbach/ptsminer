@@ -109,6 +109,7 @@ xCOMPILEFLAGS= -pthread $(DEFS) $(HARDENING) $(CXXFLAGS)
 xLDFLAGS=$(LDHARDENING) $(LDFLAGS)
 
 OBJS= \
+	obj/cpuid.o \
 	obj/sha512_avx.o \
 	obj/sha512_sse4.o \
 	obj/sha512.o \
