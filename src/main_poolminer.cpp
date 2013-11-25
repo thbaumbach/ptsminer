@@ -556,6 +556,7 @@ int main(int argc, char **argv)
 			return EXIT_FAILURE;
 		}
 	} else {
+#ifdef	__x86_64__
 		processor_info_t proc_info;
 		cpuid_basic_identify(&proc_info);
 		if (proc_info.proc_type == PROC_X64_INTEL || proc_info.proc_type == PROC_X64_AMD) {
@@ -571,6 +572,15 @@ int main(int argc, char **argv)
 				std::cout << "using SPHLIB (no avx/sse4)" << std::endl;
 		} else
 			std::cout << "using SPHLIB (unsupported arch)" << std::endl;
+#else
+	//TODO: make this compatible with 32bit systems
+	std::cout << "**** >>> WARNING" << std::endl;
+	std::cout << "**" << std::endl;
+	std::cout << "**" << "SSE4/AVX auto-detection not available on your machine" << std::endl;
+	std::cout << "**" << "please enable SSE4 or AVX manually" << std::endl;
+	std::cout << "**" << std::endl;
+	std::cout << "**** >>> WARNING" << std::endl;
+#endif
 	}
 
 	t_start = boost::posix_time::second_clock::local_time();

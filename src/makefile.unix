@@ -11,6 +11,12 @@ DEFS=-DBOOST_SPIRIT_THREADSAFE -D_FILE_OFFSET_BITS=64
 DEFS += $(addprefix -I,$(CURDIR) $(CURDIR)/obj $(BOOST_INCLUDE_PATH))
 LIBS = $(addprefix -L,$(BOOST_LIB_PATH))
 
+YASMOUTPUT = elf
+UNAME_P := $(shell uname -p)
+ifeq ($(UNAME_P),x86_64)
+	YASMOUTPUT +=64
+endif
+
 LMODE = dynamic
 LMODE2 = dynamic
 ifdef STATIC
@@ -102,7 +108,7 @@ DEBUGFLAGS= # -ggdb -g3 -fno-rounding-math
 # CXXFLAGS can be specified on the make command line, so we use xCXXFLAGS that only
 # adds some defaults in front. Unfortunately, CXXFLAGS=... $(CXXFLAGS) does not work.
 #-Wall -Wextra -Wformat -Wformat-security -Wno-unused-parameter
-xCOMPILEFLAGS= -pthread $(DEFS) $(HARDENING) $(CXXFLAGS)
+xCOMPILEFLAGS=-pthread $(DEFS) $(HARDENING) $(CXXFLAGS)
 
 # LDFLAGS can be specified on the make command line, so we use xLDFLAGS that only
 # adds some defaults in front. Unfortunately, LDFLAGS=... $(LDFLAGS) does not work.
@@ -127,7 +133,7 @@ obj/%.o: %.c
 	$(CXX) -c -O2 $(DEBUGFLAGS) -fpermissive -o $@ $<
 
 obj/%.o: intel/%.asm
-	yasm -f elf64 -o $@ $<
+	yasm -f $(YASMOUTPUT) -o $@ $<
 
 ptsminer: $(OBJS:obj/%=obj/%)
 	$(CXX) $(xLDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)

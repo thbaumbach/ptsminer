@@ -50,6 +50,8 @@
 #ifndef __CPUID_H__
 #define __CPUID_H__
 
+#ifdef	__x86_64__
+
 #include <stdint.h>
 
 #ifdef __GNUC__
@@ -57,8 +59,6 @@
 #else
 #	define	NOINLINE_ATTR
 #endif
-
-//#ifdef	__x86_64__
 
 #define VENDOR_STR_MAX          16
 #define BRAND_STR_MAX           64
@@ -113,7 +113,7 @@ void cpuid_basic_identify(processor_info_t *pc);
 }
 #endif
 
-//#endif /* __x86_64__ */
+#endif /* __x86_64__ */
 
 #endif /* __CPUID_H__ */
 
