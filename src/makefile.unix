@@ -12,8 +12,8 @@ DEFS += $(addprefix -I,$(CURDIR) $(CURDIR)/obj $(BOOST_INCLUDE_PATH))
 LIBS = $(addprefix -L,$(BOOST_LIB_PATH))
 
 YASMOUTPUT = elf
-UNAME_P := $(shell uname -p)
-ifeq ($(UNAME_P),x86_64)
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_M),x86_64)
 	YASMOUTPUT +=64
 endif
 
