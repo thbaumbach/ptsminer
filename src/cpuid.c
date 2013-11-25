@@ -52,7 +52,7 @@
 //#include "utils.h"
 #include "cpuid.h"
 
-//#ifdef	__x86_64__
+#ifdef	__x86_64__
 
 #define	SSE4_1_FLAG	0x080000
 #define	SSE4_2_FLAG	0x100000
@@ -189,4 +189,4 @@ cpuid_basic_identify(processor_info_t *pc)
 	}
 }
 
-//#endif
+#endif
