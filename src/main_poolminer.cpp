@@ -108,7 +108,7 @@ public:
 			memcpy((unsigned char*)&submitblock, (unsigned char*)block, 88);
 			std::cout << "[WORKER] collision found: " << submitblock.birthdayA << " <-> " << submitblock.birthdayB << " #" << totalCollisionCount << " @ " << submitblock.nTime << " by " << thread_id << std::endl;
 			boost::system::error_code submit_error = boost::asio::error::host_not_found;
-			boost::asio::write(*socket_to_server, boost::asio::buffer((unsigned char*)&submitblock, 88), boost::asio::transfer_all(), submit_error); //FaF
+			if (socket_to_server != NULL) boost::asio::write(*socket_to_server, boost::asio::buffer((unsigned char*)&submitblock, 88), boost::asio::transfer_all(), submit_error); //FaF
 			//if (submit_error)
 			//	std::cout << submit_error << " @ submit" << std::endl;
 			if (!submit_error)
@@ -355,11 +355,11 @@ public:
 							reject_counter = 0;
 						else
 							reject_counter++;
-//  					if (reject_counter >= 3) {
-//  						std::cout << "too many rejects (3) in a row, forcing reconnect." << std::endl;
-//  						socket->close();
-//  						done = true;
-//  					}
+						if (reject_counter >= 3) {
+							std::cout << "too many rejects (3) in a row, forcing reconnect." << std::endl;
+							socket->close();
+							done = true;
+						}
 						{
 							std::map<int,unsigned long>::iterator it = statistics.find(retval);
 							if (it == statistics.end())
@@ -573,13 +573,13 @@ int main(int argc, char **argv)
 		} else
 			std::cout << "using SPHLIB (unsupported arch)" << std::endl;
 #else
-	//TODO: make this compatible with 32bit systems
-	std::cout << "**** >>> WARNING" << std::endl;
-	std::cout << "**" << std::endl;
-	std::cout << "**" << "SSE4/AVX auto-detection not available on your machine" << std::endl;
-	std::cout << "**" << "please enable SSE4 or AVX manually" << std::endl;
-	std::cout << "**" << std::endl;
-	std::cout << "**** >>> WARNING" << std::endl;
+		//TODO: make this compatible with 32bit systems
+		std::cout << "**** >>> WARNING" << std::endl;
+		std::cout << "**" << std::endl;
+		std::cout << "**" << "SSE4/AVX auto-detection not available on your machine" << std::endl;
+		std::cout << "**" << "please enable SSE4 or AVX manually" << std::endl;
+		std::cout << "**" << std::endl;
+		std::cout << "**** >>> WARNING" << std::endl;
 #endif
 	}
 
