@@ -284,8 +284,13 @@ endstruc
 ; The size of the message pointed to by M must be an integer multiple of SHA512
 ;   message blocks.
 ; L is the message length in SHA512 blocks.
+%ifdef MAC
+global _sha512_sse4:function
+_sha512_sse4:
+%else
 global sha512_sse4:function
 sha512_sse4:
+%endif
 	cmp msglen, 0
 	je .nowork
 	

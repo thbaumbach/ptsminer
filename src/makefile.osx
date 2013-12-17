@@ -69,12 +69,12 @@ all: ptsminer
 obj/%.o: %.cpp
 	$(CXX) -c -O2 $(DEBUGFLAGS) $(xCOMPILEFLAGS) -o $@ $<
 obj/sph_%.o: sph_%.c
-	$(CXX) -c -O1 $(DEBUGFLAGS) -fpermissive -o $@ $<
+	$(CC) -c -O1 $(DEBUGFLAGS) -o $@ $<
 obj/%.o: %.c
-	$(CXX) -c -O2 $(DEBUGFLAGS) -fpermissive -o $@ $<
+	$(CC) -c -O2 $(DEBUGFLAGS) -o $@ $<
 
 obj/%.o: intel/%.asm
-	yasm -f elf64 -o $@ $<
+	yasm -f macho64 -D MAC -o $@ $<
 
 ptsminer: $(OBJS:obj/%=obj/%)
 	$(CXX) $(xLDFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
