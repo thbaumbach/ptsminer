@@ -30,8 +30,6 @@
  * @author   Thomas Pornin <thomas.pornin@cryptolog.com>
  */
  
-#pragma GCC diagnostic ignored "-fpermissive"
-
 #include <stddef.h>
 #include <string.h>
 
@@ -188,7 +186,7 @@ sph_sha384_init(void *cc)
 {
 	sph_sha384_context *sc;
 
-	sc = cc;
+	sc = (sph_sha384_context *)cc;
 	memcpy(sc->val, H384, sizeof H384);
 	sc->count = 0;
 }
@@ -199,7 +197,7 @@ sph_sha512_init(void *cc)
 {
 	sph_sha512_context *sc;
 
-	sc = cc;
+	sc = (sph_sha512_context *)cc;
 	memcpy(sc->val, H512, sizeof H512);
 	sc->count = 0;
 }
